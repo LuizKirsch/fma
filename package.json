@@ -1,0 +1,32 @@
+{
+  "name": "tako",
+  "productName": "Tako",
+  "version": "0.0.1",
+  "description": "Orquestrador de agentes de IA para desenvolvimento. App desktop para Windows, macOS e Linux.",
+  "author": "Luiz Kirsch",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "dist/main/main.js",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.node.json && tsc -p tsconfig.web.json && node scripts/copy-assets.mjs",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "typescript": "^7.0.2"
+  }
+}

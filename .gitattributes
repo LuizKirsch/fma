@@ -1,0 +1,5 @@
+# Mesmo final de linha (LF) em Windows, macOS e Linux.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary

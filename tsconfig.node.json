@@ -1,0 +1,17 @@
+{
+  // Processo principal e preload: rodam no Node do Electron.
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "sourceMap": true
+  },
+  "include": ["src/main/**/*.ts", "src/preload/**/*.ts"]
+}

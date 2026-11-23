@@ -1,0 +1,22 @@
+# Empacotamento do Tako para as três plataformas (Decisão - App Desktop com Electron).
+appId: dev.luizkirsch.tako
+productName: Tako
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+
+win:
+  target:
+    - nsis
+mac:
+  target:
+    - dmg
+  category: public.app-category.developer-tools
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
