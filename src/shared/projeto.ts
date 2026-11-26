@@ -33,7 +33,14 @@ export interface Projeto {
   ambiente: string
   /** Comandos que as cartas rodam sem pedir aprovação (padrões como "npm *"). O resto trava a task e chama o usuário. */
   comandos: string[]
+  /** Pastas do repositório que o git não versiona e que o worktree liga por symlink/junção (ex. vendor, node_modules). */
+  pastasCompartilhadas: string[]
 }
+
+export const PASTAS_PADRAO = ["vendor", "node_modules"]
+
+/** Nome relativo, sem "..", sem caminho absoluto e que não seja .env. */
+export const pastaValida = (p: string) => !!p && !/^([\\/]|[A-Za-z]:)/.test(p) && !p.split(/[\\/]/).some((s) => s === ".." || s.toLowerCase().startsWith(".env"))
 
 /** Comuns de desenvolvimento; git só leitura (commit e push ficam com o FMA e com você). */
 export const COMANDOS_PADRAO = [
@@ -43,7 +50,7 @@ export const COMANDOS_PADRAO = [
   "git status *", "git diff *", "git log *", "git show *",
 ]
 
-export type AjustesProjeto = Pick<Projeto, "nome" | "repositorio" | "branchBase" | "vagas" | "limiteDevolucoes" | "limiteTokens" | "comandos">
+export type AjustesProjeto = Pick<Projeto, "nome" | "repositorio" | "branchBase" | "vagas" | "limiteDevolucoes" | "limiteTokens" | "comandos" | "pastasCompartilhadas">
 export type PreferenciasMesa = Pick<Projeto, "conexoesVisiveis" | "mostrarSugestoes" | "vista">
 
 export interface NovoProjeto {
@@ -80,5 +87,7 @@ export function validarAjustes(a: AjustesProjeto): string | null {
   if (!inteiroEm(a.vagas, LIMITES_PROJETO.vagas)) return `As vagas vão de ${LIMITES_PROJETO.vagas.min} a ${LIMITES_PROJETO.vagas.max}.`
   if (!inteiroEm(a.limiteDevolucoes, LIMITES_PROJETO.limiteDevolucoes)) return `O limite de devoluções vai de ${LIMITES_PROJETO.limiteDevolucoes.min} a ${LIMITES_PROJETO.limiteDevolucoes.max}.`
   if (!inteiroEm(a.limiteTokens, LIMITES_PROJETO.limiteTokens)) return `O limite de tokens vai de ${LIMITES_PROJETO.limiteTokens.min} a ${LIMITES_PROJETO.limiteTokens.max}.`
+  const ruim = (a.pastasCompartilhadas ?? []).map((p) => p.trim()).filter(Boolean).find((p) => !pastaValida(p))
+  if (ruim) return `Pasta ligada inválida: "${ruim}". Use nomes relativos, sem "..", sem caminho absoluto e sem .env.`
   return null
 }

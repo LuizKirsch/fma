@@ -193,6 +193,11 @@ const MIGRACOES: string[] = [
   `
   ALTER TABLE task ADD COLUMN card TEXT;
   `,
+  // Decisões do usuário (valem para todas as cartas da task) e pastas do repositório ligadas no worktree (JSON; null = padrão).
+  `
+  ALTER TABLE task ADD COLUMN decisoes TEXT NOT NULL DEFAULT '';
+  ALTER TABLE projeto ADD COLUMN pastas_compartilhadas TEXT;
+  `,
   // Próxima migração: item novo AQUI no fim.
 ]
 

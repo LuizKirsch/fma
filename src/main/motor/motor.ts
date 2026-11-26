@@ -5,15 +5,16 @@
  * As integrações (monitores, apoio, Maestro) entram por `ligarGanchos`, sem o motor importar nenhuma delas.
  */
 import type { DatabaseSync } from "node:sqlite"
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { caminhos, paraFs, rodar } from "../ambiente"
 import { promptFinal } from "@shared/carta"
+import { pastaValida } from "@shared/projeto"
 import { cliPorId, type CliId } from "@shared/ia"
 import type { Resultado } from "@shared/tipos"
 import type { CopiaCarta, DecisaoPendente, DiffTask, EstadoCarta, EventoMotor, NovaTask, PreviaTask, Task, TipoEvento } from "@shared/task"
 import { detectarClis } from "../clis"
 import { secoesBiblioteca } from "../biblioteca"
-import { extrairJson, semLinhaStatus, statusDaEntrega } from "./cli-parse"
+import { decisaoResposta, decisaoSeguir, extrairJson, secaoDecisoes, semLinhaStatus, statusDaEntrega } from "./cli-parse"
 import { emTransacao, inserirEvento, lerEventos, lerTask, lerTaskCartas, lerTaskConexoes } from "./dados"
 import * as fx from "./fluxo"
 import { lerCartasDaMesa, lerConexoes, lerProjeto, perguntaDaSkill, type ProjetoLido } from "./leitura-mesa"
@@ -122,7 +123,10 @@ const wtVivo = (amb: string, wt: string) => existsSync(paraFs(amb, `${wt}/.git`)
 
 /** Remove o worktree. Se o git já o soltou e só sobrou a pasta (Windows segura logo após matar o processo), conta como removido. */
 async function removerWorktree(repo: string, wt: string, amb: string): Promise<void> {
-  try { await git(repo, ["worktree", "remove", "--force", wt], amb) } catch (e) {
+  try {
+    await git(repo, ["worktree", "remove", "--force", wt], amb)
+    rmSync(paraFs(amb, wt), { recursive: true, force: true }) // sobra a pasta com a junção das pastas ligadas; rmSync solta o link sem apagar o alvo
+  } catch (e) {
     if (wtVivo(amb, wt)) throw e
     await git(repo, ["worktree", "prune"], amb).catch(() => {})
     try { rmSync(paraFs(amb, wt), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch { /* ponytail: sobra pasta vazia; inofensiva */ }
@@ -167,7 +171,32 @@ async function faltaContaDe(db: DatabaseSync, ids: string[], amb: string): Promi
 
 const caminhoWorktree = (p: ProjetoLido, numero: number) => {
   const P = caminhos(p.ambiente)
-  return P.join(P.dirname(p.repositorio), `${P.basename(p.repositorio)}-fma-worktrees`, `task-${numero}`)
+  return P.join(p.repositorio, ".fma", "worktrees", `task-${numero}`) // dentro do repositório: um container que monta o repo enxerga a task; o git ignora via info/exclude
+}
+
+/** Garante `.fma/` (e as pastas ligadas) em info/exclude do repositório e liga no worktree as pastas que existem no principal e faltam nele. Falha só avisa. */
+async function prepararWorktree(projeto: ProjetoLido, wt: string, aviso: (t: string) => void) {
+  const amb = projeto.ambiente, P = caminhos(amb), repo = projeto.repositorio
+  const ligadas: string[] = []
+  for (const pasta of projeto.pastasCompartilhadas.filter(pastaValida)) {
+    const alvo = P.join(repo, pasta), link = P.join(wt, pasta)
+    try {
+      if (!existsSync(paraFs(amb, alvo)) || existsSync(paraFs(amb, link))) continue
+      mkdirSync(paraFs(amb, P.dirname(link)), { recursive: true })
+      const rel = P.relative(P.dirname(link), alvo)
+      if (amb === "local") symlinkSync(process.platform === "win32" ? alvo : rel, paraFs(amb, link), "junction") // junção do Windows pede alvo absoluto e não exige admin
+      else await rodar(amb, "ln", ["-s", rel, link])
+      ligadas.push(pasta)
+    } catch (e) { aviso(`Não consegui ligar a pasta ${pasta} no worktree: ${(e as Error).message}`) }
+  }
+  try {
+    const comum = P.resolve(repo, (await git(repo, ["rev-parse", "--git-common-dir"], amb)).trim())
+    const arq = paraFs(amb, P.join(comum, "info", "exclude"))
+    const atual = existsSync(arq) ? readFileSync(arq, "utf8") : ""
+    const tem = new Set(atual.split(/\r?\n/).map((l) => l.trim()))
+    const falta = [".fma/", ...ligadas.map((p) => `/${p.replace(/\\/g, "/")}`)].filter((l) => !tem.has(l)) // symlink não casa com "vendor/" do .gitignore: sem isso o git add -A o versionaria
+    if (falta.length) { mkdirSync(paraFs(amb, P.dirname(arq)), { recursive: true }); writeFileSync(arq, `${atual && !atual.endsWith("\n") ? "\n" : ""}${falta.join("\n")}\n`) }
+  } catch (e) { aviso(`Não consegui atualizar o info/exclude do repositório: ${(e as Error).message}`) }
 }
 
 /** Roda uma carta na CLI dela (RF 6.44), com stdout em streaming para o console. */
@@ -227,6 +256,7 @@ function entrada(ctx: Ctx, id: string): string {
     c.prompt,
     `---\n# Task #${t.numero}${t.titulo ? `: ${t.titulo}` : ""}\n## Missão\n${t.missao}${t.ajustes ? `\n## Ajustes pedidos\n${t.ajustes}` : ""}`,
     blocoContexto(ctx),
+    secaoDecisoes(t.decisoes),
     `## Sua tarefa no plano\n${ctx.tarefas.get(id) ?? t.missao}`,
     recebido.length ? `## O que você recebeu\n${recebido.map((de) => `### De ${nome(ctx, de)}\n${ctx.entregas.get(de)}`).join("\n\n")}` : "",
     dev.length ? `## Devolução: refaça levando isto em conta\n${dev.map((d) => `- ${d}`).join("\n")}` : "",
@@ -522,6 +552,7 @@ async function comecarReservado(db: DatabaseSync, task: Task, projeto: ProjetoLi
   try {
     mkdirSync(caminhos("local").dirname(paraFs(amb, worktree)), { recursive: true })
     await git(projeto.repositorio, ["worktree", "add", "-b", branch, worktree, projeto.branchBase], amb)
+    await prepararWorktree(projeto, worktree, (t) => registrarEvento(db, taskId, "aviso", t))
   } catch (e) {
     return { ok: false, erro: `Não consegui criar o worktree: ${(e as Error).message}` }
   }
@@ -889,7 +920,7 @@ export async function aceitarTask(db: DatabaseSync, taskId: string, modo: "pr" |
         throw e
       }
     }
-    if (task.worktree) await git(repo, ["worktree", "remove", "--force", task.worktree], amb).catch(() => {})
+    if (task.worktree) await removerWorktree(repo, task.worktree, amb).catch(() => {})
     db.prepare("UPDATE task SET situacao = 'concluida', pr_url = ?, encerrada_em = ? WHERE id = ?").run(prUrl, Date.now(), taskId)
     registrarEvento(db, taskId, "aviso", modo === "pr" ? `Task aceita: PR aberto${prUrl ? ` (${prUrl})` : ""}.` : modo === "nada" ? "Task concluída sem mudanças (sem PR)." : `Task aceita: ${branch} entrou em ${base} (merge local).`)
     const nova = avisarTask(db, taskId)
@@ -935,6 +966,7 @@ async function voltarComAjuste(db: DatabaseSync, task: Task, projeto: ProjetoLid
       mkdirSync(caminhos("local").dirname(paraFs(amb, wt)), { recursive: true })
       await git(projeto.repositorio, ["worktree", "prune"], amb).catch(() => {})
       await git(projeto.repositorio, ["worktree", "add", wt, task.branch!], amb)
+      await prepararWorktree(projeto, wt, (t) => registrarEvento(db, taskId, "aviso", t))
     }
   } catch (e) { return { ok: false, erro: `Não consegui recriar o worktree: ${(e as Error).message}` } }
   emTransacao(db, () => {
@@ -969,7 +1001,7 @@ export async function revisarTask(db: DatabaseSync, taskId: string): Promise<Res
 /** Fecha uma task sem execução em memória (pronta, na fila, ou em andamento com o app recém-aberto): vira parada. */
 async function fecharRegistro(db: DatabaseSync, task: Task, motivo: string) {
   const projeto = lerProjeto(db, task.projetoId)
-  if (task.worktree && projeto) await git(projeto.repositorio, ["worktree", "remove", "--force", task.worktree], projeto.ambiente).catch(() => {})
+  if (task.worktree && projeto) await removerWorktree(projeto.repositorio, task.worktree, projeto.ambiente).catch(() => {})
   db.prepare("UPDATE task SET situacao = 'parada', worktree = NULL, fila_em = NULL, encerrada_em = ?, decisao_motivo = NULL, decisao_carta_id = NULL, decisao_questionador_id = NULL WHERE id = ?")
     .run(Date.now(), task.id)
   registrarEvento(db, task.id, "fim", motivo)
@@ -1035,6 +1067,7 @@ export function liberarMaisUmaVolta(db: DatabaseSync, taskId: string, resposta?:
     fx.liberarVolta(ctx.voltas, questionadorId)
     db.prepare("UPDATE task_carta SET voltas = 0 WHERE task_id = ? AND carta_id = ?").run(taskId, questionadorId)
   }
+  const decisao = resposta?.trim() ? decisaoResposta(task.decisao.motivo, resposta) : ""
   if (resposta?.trim()) guardarApontamentos(ctx, cartaId, [...(ctx.apontamentos.get(cartaId) ?? []), `Resposta do usuário: ${resposta.trim()}`])
   for (const [id, copia] of ctx.copias) { // "troque a conta da carta e reenvie": vale a conta atual da carta
     const k = db.prepare("SELECT conta_id FROM carta WHERE id = ?").get(id) as { conta_id: string | null } | undefined
@@ -1047,7 +1080,7 @@ export function liberarMaisUmaVolta(db: DatabaseSync, taskId: string, resposta?:
     marcar(ctx, r, "espera", r === cartaId ? `Refazendo: ${nome(ctx, questionadorId)} devolveu` : "Esperando entregas")
   }
   ctx.travada = false
-  salvarTask(ctx, { situacao: "andamento", decisao_motivo: null, decisao_carta_id: null, decisao_questionador_id: null })
+  salvarTask(ctx, { situacao: "andamento", decisao_motivo: null, decisao_carta_id: null, decisao_questionador_id: null, decisoes: [task.decisoes, decisao].filter(Boolean).join("\n") })
   registrar(ctx, "aviso", `Você liberou mais uma volta para ${nome(ctx, questionadorId)}.`)
   seguro(() => ganchos.resolverFora?.(ctx.task.projetoId, taskId))
   void laco(ctx).catch((e) => encerrar(ctx, "parada", `Erro no motor: ${(e as Error).message}`))
@@ -1065,7 +1098,7 @@ export function seguirMesmoAssim(db: DatabaseSync, taskId: string): Resultado<Ta
   registrar(ctx, "aviso", `Pendência: ${motivo} Você escolheu seguir mesmo assim.`, cartaId)
   marcar(ctx, cartaId, "concluida", "Concluída com pendência")
   ctx.travada = false
-  salvarTask(ctx, { situacao: "andamento", decisao_motivo: null, decisao_carta_id: null, decisao_questionador_id: null })
+  salvarTask(ctx, { situacao: "andamento", decisao_motivo: null, decisao_carta_id: null, decisao_questionador_id: null, decisoes: [task.decisoes, decisaoSeguir(motivo)].filter(Boolean).join("\n") })
   seguro(() => ganchos.resolverFora?.(ctx.task.projetoId, taskId))
   void laco(ctx).catch((e) => encerrar(ctx, "parada", `Erro no motor: ${(e as Error).message}`))
   return { ok: true, valor: ctx.task }

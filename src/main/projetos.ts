@@ -13,7 +13,7 @@ import { criarTask } from "./motor/motor"
 import { cardsEmSegundoPlano } from "./fontes"
 import { apagarChatDoProjeto } from "./maestro/store"
 import { listarCartasApoio, removerCartaApoio } from "./apoio/repo"
-import { COMANDOS_PADRAO, validarAjustes, type AjustesProjeto, type NovoProjeto, type PreferenciasMesa, type Projeto, type Repositorio, type UsoDaCarta } from "@shared/projeto"
+import { COMANDOS_PADRAO, PASTAS_PADRAO, validarAjustes, type AjustesProjeto, type NovoProjeto, type PreferenciasMesa, type Projeto, type Repositorio, type UsoDaCarta } from "@shared/projeto"
 import type { Resultado } from "@shared/tipos"
 import type { ClasseId } from "@shared/catalogo"
 
@@ -45,7 +45,7 @@ export async function inspecionarRepositorio(pasta: string, ambienteAtual = LOCA
 interface Linha {
   id: string; nome: string; repositorio: string; branch_base: string; ordem: number; vagas: number; limite_devolucoes: number
   limite_tokens: number; conexoes_visiveis: number; mostrar_sugestoes: number; vista: string | null; criado_em: number
-  contexto: string; fonte_id: string | null; fonte_projeto: string | null; ambiente: string; comandos: string | null
+  contexto: string; fonte_id: string | null; fonte_projeto: string | null; ambiente: string; comandos: string | null; pastas_compartilhadas: string | null
 }
 const paraProjeto = (l: Linha): Projeto => ({
   id: l.id, nome: l.nome, repositorio: l.repositorio, branchBase: l.branch_base, ordem: l.ordem, vagas: l.vagas,
@@ -53,6 +53,7 @@ const paraProjeto = (l: Linha): Projeto => ({
   mostrarSugestoes: !!l.mostrar_sugestoes, vista: l.vista ? JSON.parse(l.vista) : null, criadoEm: l.criado_em,
   contexto: l.contexto, fonteId: l.fonte_id, fonteProjeto: l.fonte_projeto ? JSON.parse(l.fonte_projeto) : null, ambiente: l.ambiente,
   comandos: l.comandos ? JSON.parse(l.comandos) : COMANDOS_PADRAO,
+  pastasCompartilhadas: l.pastas_compartilhadas ? JSON.parse(l.pastas_compartilhadas) : PASTAS_PADRAO,
 })
 
 export const listarProjetos = (db: DatabaseSync): Projeto[] =>
@@ -71,7 +72,7 @@ async function conferirRepositorio(pasta: string, branch: string, ambienteAtual 
 /** RF 2.01 a 2.06 e RN 15, 16: cria o projeto e já monta a mesa com o time. */
 export async function criarProjeto(db: DatabaseSync, entrada: NovoProjeto): Promise<Resultado<Projeto>> {
   const nome = entrada.nome.trim()
-  const erro = validarAjustes({ nome, repositorio: entrada.repositorio, branchBase: entrada.branchBase, vagas: 2, limiteDevolucoes: 2, limiteTokens: 150_000, comandos: [] })
+  const erro = validarAjustes({ nome, repositorio: entrada.repositorio, branchBase: entrada.branchBase, vagas: 2, limiteDevolucoes: 2, limiteTokens: 150_000, comandos: [], pastasCompartilhadas: [] })
   if (erro) return { ok: false, erro }
   const time = [...new Set(entrada.cartaIds)].map((id) => db.prepare("SELECT id, classe FROM carta WHERE id = ?").get(id) as { id: string; classe: ClasseId } | undefined)
   if (time.some((c) => !c)) return { ok: false, erro: "Uma das cartas do time não existe mais." }
@@ -110,8 +111,8 @@ export async function atualizarProjeto(db: DatabaseSync, id: string, a: AjustesP
     ambiente = repo.valor.ambiente
   }
   const comandos = (ajustes.comandos ?? atual.comandos).map((c) => c.trim()).filter(Boolean)
-  db.prepare("UPDATE projeto SET nome = ?, repositorio = ?, ambiente = ?, branch_base = ?, vagas = ?, limite_devolucoes = ?, limite_tokens = ?, comandos = ? WHERE id = ?")
-    .run(ajustes.nome, repositorio, ambiente, ajustes.branchBase, ajustes.vagas, ajustes.limiteDevolucoes, ajustes.limiteTokens, JSON.stringify(comandos), id)
+  db.prepare("UPDATE projeto SET nome = ?, repositorio = ?, ambiente = ?, branch_base = ?, vagas = ?, limite_devolucoes = ?, limite_tokens = ?, comandos = ?, pastas_compartilhadas = ? WHERE id = ?")
+    .run(ajustes.nome, repositorio, ambiente, ajustes.branchBase, ajustes.vagas, ajustes.limiteDevolucoes, ajustes.limiteTokens, JSON.stringify(comandos), JSON.stringify((ajustes.pastasCompartilhadas ?? atual.pastasCompartilhadas).map((p) => p.trim().replace(/[\\/]+$/, "")).filter(Boolean)), id)
   return { ok: true, valor: buscar(db, id)! }
 }
 
