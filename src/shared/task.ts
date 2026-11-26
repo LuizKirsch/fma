@@ -32,6 +32,8 @@ export interface Task {
   titulo: string | null
   missao: string
   ajustes: string
+  /** Decisões do usuário nas travas (uma por linha); entram no prompt de todas as cartas. */
+  decisoes: string
   /** Contexto da task: editável só antes de iniciar. */
   contexto: string
   /** Card da fonte (spec) em texto legível; buscado na importação e ao iniciar. */

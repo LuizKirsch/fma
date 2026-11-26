@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite"
 // @ts-ignore TS5097: a extensão .ts só é necessária para rodar direto com node
 import * as f from "./fluxo.ts"
 // @ts-ignore TS5097
-import { lerSaida, extrairJson, statusDaEntrega, semLinhaStatus } from "./cli-parse.ts"
+import { lerSaida, extrairJson, statusDaEntrega, semLinhaStatus, decisaoResposta, decisaoSeguir, secaoDecisoes } from "./cli-parse.ts"
 // @ts-ignore TS5097
 import { buscarTasks, cartaEmUso, listarTasks, mensagemCartaEmUso } from "./dados.ts"
 // @ts-ignore TS5097
@@ -125,5 +125,11 @@ assert.equal(statusDaEntrega("A suíte não foi testada.").motivo, "A suíte nã
 assert.equal(statusDaEntrega("EACCES: Permission denied").status, "bloqueado")
 assert.equal(statusDaEntrega("Isso precisa de decisão sua.").status, "bloqueado")
 assert.equal(semLinhaStatus("Resumo\nFMA-STATUS: bloqueado: x"), "Resumo")
+
+// decisões do usuário entram na seção de todas as cartas
+const dec = [decisaoResposta("testes não rodaram: sem vendor/", "valido depois"), decisaoSeguir("testes não rodaram")].join("\n")
+assert.match(dec, /^- Sobre "testes não rodaram: sem vendor\/": valido depois\n- O usuário aceitou seguir sem resolver: "testes não rodaram"\. Não trave de novo/)
+assert.match(secaoDecisoes(dec), /Decisões do usuário nesta task \(valem para todas as cartas\)[\s\S]*Não use FMA-STATUS: bloqueado[\s\S]*Revisor não devolve/)
+assert.equal(secaoDecisoes(""), "")
 
 console.log("motor.check: ok")

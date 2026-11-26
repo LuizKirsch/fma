@@ -74,3 +74,11 @@ export function extrairJson(texto: string): any | null {
   }
   return null
 }
+
+/** Decisões do usuário nas travas: uma linha cada; entram no prompt de todas as cartas da task. */
+const resumo = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, 160)
+export const decisaoResposta = (motivo: string, resposta: string) => `- Sobre "${resumo(motivo)}": ${resposta.trim()}`
+export const decisaoSeguir = (motivo: string) => `- O usuário aceitou seguir sem resolver: "${resumo(motivo)}". Não trave de novo por isso; entregue com a ressalva.`
+export const secaoDecisoes = (decisoes: string) => decisoes.trim()
+  ? `## Decisões do usuário nesta task (valem para todas as cartas)\n${decisoes.trim()}\nNão use FMA-STATUS: bloqueado por motivo já decidido aqui (entregue com a ressalva). O Revisor não devolve a entrega por isso.`
+  : ""

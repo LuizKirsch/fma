@@ -9,7 +9,7 @@ export function emTransacao<T>(db: DatabaseSync, fn: () => T): T {
 }
 
 const tarefaDe = (l: any): Task => ({
-  id: l.id, numero: l.numero, projetoId: l.projeto_id, taskOriginalId: l.task_original_id, referencia: l.referencia, titulo: l.titulo, missao: l.missao, ajustes: l.ajustes, contexto: l.contexto ?? "", card: l.card ?? null,
+  id: l.id, numero: l.numero, projetoId: l.projeto_id, taskOriginalId: l.task_original_id, referencia: l.referencia, titulo: l.titulo, missao: l.missao, ajustes: l.ajustes, decisoes: l.decisoes ?? "", contexto: l.contexto ?? "", card: l.card ?? null,
   situacao: l.situacao, branch: l.branch, worktree: l.worktree, voltas: l.voltas, tokens: l.tokens, alertaOrcamento: !!l.alerta_orcamento, posicaoFila: l.posicao_fila ?? null,
   decisao: l.decisao_motivo ? { motivo: l.decisao_motivo, cartaId: l.decisao_carta_id, questionadorId: l.decisao_questionador_id } : null,
   prUrl: l.pr_url ?? null, criadaEm: l.criada_em, iniciadaEm: l.iniciada_em, encerradaEm: l.encerrada_em,
