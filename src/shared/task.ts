@@ -34,6 +34,8 @@ export interface Task {
   ajustes: string
   /** Contexto da task: editável só antes de iniciar. */
   contexto: string
+  /** Card da fonte (spec) em texto legível; buscado na importação e ao iniciar. */
+  card?: string | null
   situacao: SituacaoTask
   branch: string | null
   worktree: string | null

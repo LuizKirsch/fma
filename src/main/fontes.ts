@@ -10,6 +10,7 @@ import type { Resultado } from "@shared/tipos"
 import { graphqlGithub } from "./monitores/conector"
 import { projetosMcp, servidorDe, tasksMcp, testarMcp, ferramentasMcp, usarFerramentaMcp } from "./fontes-mcp"
 import { criarTask, definirContextoTask, registrarEvento } from "./motor/motor"
+import { lerTask } from "./motor/dados"
 import { listarMcpsDaClaude } from "./claude-mcp"
 
 type Cfg = Record<string, unknown>
@@ -129,19 +130,23 @@ export async function buscarRestantes(db: DatabaseSync, projetoId: string): Prom
   const p = db.prepare("SELECT fonte_id, fonte_projeto FROM projeto WHERE id = ?").get(projetoId) as { fonte_id: string | null; fonte_projeto: string | null } | undefined
   if (!p?.fonte_id || !p.fonte_projeto) throw new Error("Este projeto não veio de uma fonte.")
   const ja = new Set((db.prepare("SELECT referencia FROM task WHERE projeto_id = ? AND referencia IS NOT NULL").all(projetoId) as { referencia: string }[]).map((r) => r.referencia))
-  let n = 0
+  const novas: string[] = []
   for (const t of await tasksDaFonte(db, p.fonte_id, JSON.parse(p.fonte_projeto).id)) {
     if (ja.has(t.ref)) continue
-    if (criarTask(db, { projetoId, missao: t.descricao.trim() || t.titulo, titulo: t.titulo, referencia: t.ref }).ok) n++
+    const r = criarTask(db, { projetoId, missao: t.descricao.trim() || t.titulo, titulo: t.titulo, referencia: t.ref })
+    if (r.ok) novas.push(r.valor.id)
   }
-  return n
+  cardsEmSegundoPlano(db, novas)
+  return novas.length
 }
 
 // ---------- card como spec e movimento ao começar/aceitar (fonte MCP) ----------
 
 /** A fonte MCP e o id do card de uma task: pelo monitor (conector "fonte:<id>") ou pelo projeto que veio da fonte. `monitor` traz as colunas do próprio monitor. */
 function origemMcp(db: DatabaseSync, taskId: string) {
-  const v = db.prepare("SELECT v.ref, m.conector, m.coluna_inicio, m.coluna_conclusao FROM monitor_visto v JOIN monitor m ON m.id = v.monitor_id WHERE v.task_id = ?").get(taskId) as any
+  const visto = db.prepare("SELECT v.ref, m.conector, m.coluna_inicio, m.coluna_conclusao FROM monitor_visto v JOIN monitor m ON m.id = v.monitor_id WHERE v.task_id = ?").get(taskId) as any
+  // Sem visto (tasks criadas antes da correção do monitor): o monitor de fonte do próprio projeto.
+  const v = visto ?? db.prepare("SELECT NULL AS ref, m.conector, m.coluna_inicio, m.coluna_conclusao FROM monitor m JOIN task t ON t.projeto_id = m.projeto_id WHERE t.id = ? AND m.conector LIKE 'fonte:%' LIMIT 1").get(taskId) as any
   const t = db.prepare("SELECT t.referencia, p.fonte_id FROM task t JOIN projeto p ON p.id = t.projeto_id WHERE t.id = ?").get(taskId) as any
   const id = v?.conector?.startsWith("fonte:") ? v.conector.slice(6) : t?.fonte_id
   const ref = v?.ref ?? t?.referencia
@@ -149,18 +154,20 @@ function origemMcp(db: DatabaseSync, taskId: string) {
   return f?.tipo === "mcp" ? { f, ref: String(ref), monitor: v ? { inicio: String(v.coluna_inicio), conclusao: String(v.coluna_conclusao) } : undefined } : undefined
 }
 
-/** Texto do card (ferramenta de detalhe) para o contexto da task; vazio se não há fonte/ferramenta. Falha vira aviso no histórico da task, sem impedir. */
-export async function contextoDaFonte(db: DatabaseSync, taskId: string): Promise<string> {
+/** Busca o card (ferramenta de detalhe) e grava em task.card; falha mantém o anterior. */
+export async function atualizarCard(db: DatabaseSync, taskId: string): Promise<void> {
   const o = origemMcp(db, taskId)
-  if (!o) return ""
-  try {
-    const d = await usarFerramentaMcp(o.f.config, "detalhe", o.ref)
-    return d ? `## Card ${o.ref} (${o.f.rotulo})
-${d}` : ""
-  } catch (e) {
-    registrarEvento(db, taskId, "aviso", `Não consegui ler o card ${o.ref} na fonte: ${msg(e)}`)
-    return ""
-  }
+  if (!o) throw new Error("Esta task não tem uma fonte MCP.")
+  const d = await usarFerramentaMcp(o.f.config, "detalhe", o.ref)
+  if (!d) throw new Error("A fonte não tem ferramenta de detalhe.")
+  db.prepare("UPDATE task SET card = ? WHERE id = ?").run(d, taskId)
+}
+/** Igual, mas falha só vira aviso no histórico da task (importação e início). */
+export const atualizarCardSilencioso = (db: DatabaseSync, taskId: string) =>
+  atualizarCard(db, taskId).catch((e) => { if (origemMcp(db, taskId)) registrarEvento(db, taskId, "aviso", `Não consegui ler o card na fonte: ${msg(e)}`) })
+/** Importação: busca os cards em segundo plano, um de cada vez (cada busca abre uma conexão). */
+export function cardsEmSegundoPlano(db: DatabaseSync, ids: string[]) {
+  void (async () => { for (const id of ids) await atualizarCardSilencioso(db, id) })()
 }
 
 /** Ao começar/aceitar, move o card para a coluna da fonte (se preenchida; o monitor, se tiver coluna própria, já moveu). */
@@ -186,6 +193,7 @@ export function registrarIpcFontes(db: DatabaseSync) {
   ipcMain.handle("fontes:testar", (_e, id: string) => tentar(() => testarFonte(db, id)))
   ipcMain.handle("fontes:projetos", (_e, id: string) => tentar(() => projetosDaFonte(db, id)))
   ipcMain.handle("fontes:tasks", (_e, id: string, projetoId: string) => tentar(() => tasksDaFonte(db, id, projetoId)))
+  ipcMain.handle("tasks:atualizar-card", (_e, id: string) => tentar(async () => { await atualizarCard(db, id); return lerTask(db, id)! }))
   ipcMain.handle("fontes:buscar", (_e, projetoId: string) => tentar(() => buscarRestantes(db, projetoId)))
   ipcMain.handle("fontes:mcps-claude", () => listarMcpsDaClaude())
   ipcMain.handle("contexto:projeto", (_e, id: string, texto: string) => {

@@ -190,6 +190,9 @@ const MIGRACOES: string[] = [
   `
   UPDATE projeto SET limite_tokens = 150000 WHERE limite_tokens = 20000;
   `,
+  `
+  ALTER TABLE task ADD COLUMN card TEXT;
+  `,
   // Próxima migração: item novo AQUI no fim.
 ]
 

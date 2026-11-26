@@ -10,6 +10,7 @@ import { git } from "./motor/processo"
 import { deCaminho, LOCAL, paraFs } from "./ambiente"
 import { montarMesaInicial } from "./mesa"
 import { criarTask } from "./motor/motor"
+import { cardsEmSegundoPlano } from "./fontes"
 import { apagarChatDoProjeto } from "./maestro/store"
 import { listarCartasApoio, removerCartaApoio } from "./apoio/repo"
 import { COMANDOS_PADRAO, validarAjustes, type AjustesProjeto, type NovoProjeto, type PreferenciasMesa, type Projeto, type Repositorio, type UsoDaCarta } from "@shared/projeto"
@@ -87,7 +88,9 @@ export async function criarProjeto(db: DatabaseSync, entrada: NovoProjeto): Prom
     montarMesaInicial(db, id, time as { id: string; classe: ClasseId }[])
   })
   // As tasks marcadas na fonte viram tasks prontas, com a referência da fonte.
-  for (const t of entrada.tasks ?? []) criarTask(db, { projetoId: id, missao: t.descricao.trim() || t.titulo, titulo: t.titulo, referencia: t.ref })
+  const novas: string[] = []
+  for (const t of entrada.tasks ?? []) { const r = criarTask(db, { projetoId: id, missao: t.descricao.trim() || t.titulo, titulo: t.titulo, referencia: t.ref }); if (r.ok) novas.push(r.valor.id) }
+  cardsEmSegundoPlano(db, novas)
   return { ok: true, valor: buscar(db, id)! }
 }
 

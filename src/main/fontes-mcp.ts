@@ -8,6 +8,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { argumentosDe, COLUNA_PRONTA, mapearFerramentas, type FerramentaDoServidor, type MapaMcp, type PapelMcp, type ProjetoDaFonte, type TaskDaFonte, type TipoFonte } from "@shared/fonte"
 import { comCliente } from "./apoio/mcp"
 import { mascarar } from "./ambiente"
+import { cardLegivel } from "./card"
 
 type Obj = Record<string, any>
 type Tool = FerramentaDoServidor
@@ -177,7 +178,7 @@ export const tasksMcp = (tipo: TipoFonte, config: Obj, projetoId: string, comFec
 
 /**
  * Escrita/leitura de um card pelas ferramentas descobertas. `mover`/`comentar` devolvem false se o servidor não tem a ferramenta
- * (o chamador avisa); `detalhe` devolve o texto mascarado (até ~12 KB) ou null.
+ * (o chamador avisa); `detalhe` devolve o card legível e mascarado (até ~16 KB) ou null.
  */
 export const usarFerramentaMcp = (config: Obj, papel: "mover" | "comentar" | "detalhe", ref: string, valor = ""): Promise<string | null | false> =>
   comServidor(config, async (x) => {
@@ -186,7 +187,7 @@ export const usarFerramentaMcp = (config: Obj, papel: "mover" | "comentar" | "de
     const a = argumentosDe(x.tools.find((t) => t.name === nome))
     const campo = papel === "mover" ? a.coluna : papel === "comentar" ? a.texto : undefined
     const saida = await chamar(x, [nome], { [a.id ?? "id"]: ref, ...(campo ? { [campo]: valor } : {}) })
-    return papel === "detalhe" ? mascarar(saida).slice(0, 12_000) : saida
+    return papel === "detalhe" ? cardLegivel(saida) : saida
   })
 
 /** Projetos com o total de tasks abertas e quantas estão prontas. ponytail: conta até 100 tasks por projeto, no máximo 30 projetos. */

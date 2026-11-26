@@ -165,6 +165,8 @@ export interface FmaApi {
     revisar(id: string): Promise<Resultado<Task>>
     /** RF 6.41: reabre uma task parada como task nova e pronta. */
     reabrir(id: string): Promise<Resultado<Task>>
+    /** Busca de novo o card da fonte e grava em task.card. */
+    atualizarCard(id: string): Promise<Resultado<Task>>
     /** RF 8.06 */
     buscar(projetoId: string, termo: string): Promise<Task[]>
     /** Chame depois de aumentar as vagas do projeto: começa as da fila que passaram a caber. */

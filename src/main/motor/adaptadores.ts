@@ -13,7 +13,7 @@ import type { DepsApoio } from "../apoio/ports"
 import { eventosApoio } from "../apoio/ports"
 import { ferramentasDaCarta } from "../apoio/ferramentas"
 import type { DepsMonitor } from "../monitores/ports"
-import { contextoDaFonte, moverNaFonte } from "../fontes"
+import { atualizarCardSilencioso, moverNaFonte } from "../fontes"
 import { aoComecar, aoConcluir, aoParar, aoTravar } from "../monitores/servico"
 import type { Task } from "@shared/task"
 import { lerTask, lerTaskCartas, listarTasks } from "./dados"
@@ -102,6 +102,7 @@ export function criarDepsMonitor(db: DatabaseSync): DepsMonitor {
         comecaPor: p.cartaInicialId ? [p.cartaInicialId] : undefined,
       }))
       db.prepare("UPDATE task SET monitor_id = ? WHERE id = ?").run(p.monitorId, t.id)
+      queueMicrotask(() => void atualizarCardSilencioso(db, t.id)) // depois de o monitor gravar o visto (que liga a task à fonte)
       if (p.iniciarAgora) void motor.iniciarTask(db, t.id).then((r) => {
         if (!r.ok) motor.chamarUsuario({ projetoId: p.projetoId, taskId: t.id, texto: `Task #${t.numero} (${p.titulo}) não conseguiu iniciar: ${r.erro}` }) // RN 81
       })
@@ -119,7 +120,7 @@ export function ligarIntegracoes(db: DatabaseSync, maestro: Maestro): () => void
   motor.ligarGanchos({
     aoComecar: async (id) => { await aoComecar(db, id); await moverNaFonte(db, id, "aoComecar") },
     aoConcluir: async (id) => { await aoConcluir(db, id, { prUrl: lerTask(db, id)?.prUrl ?? undefined }); await moverNaFonte(db, id, "aoAceitar") },
-    contextoExtra: (id) => contextoDaFonte(db, id),
+    atualizarCard: (id) => atualizarCardSilencioso(db, id),
     aoParar: (id, m) => aoParar(db, id, m),
     aoTravar: (id, duvida) => aoTravar(db, id, duvida),
     ferramentasDaCarta: (p) => ferramentasDaCarta(db, p),

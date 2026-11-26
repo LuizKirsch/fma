@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { DetalheTask, DiffTask, Task, TipoEvento } from "@shared/task"
 import type { Carta } from "@shared/tipos"
-import { progresso } from "@/data/tasks"
+import { carregarDetalhe, progresso } from "@/data/tasks"
 import { EntregaApoio } from "@/components/EntregaApoio"
 import { BadgeSituacao, Barra, nomeDaTask, rotuloDaTask } from "@/components/TaskUi"
 
@@ -64,12 +64,36 @@ function Mudancas({ task }: { task: Task }) {
   )
 }
 
-type Aba = "entrega" | "mudancas" | "historico"
-const ABAS: { id: Aba; rotulo: string }[] = [{ id: "entrega", rotulo: "Entrega" }, { id: "mudancas", rotulo: "Mudanças" }, { id: "historico", rotulo: "Histórico" }]
+type Aba = "card" | "entrega" | "mudancas" | "historico"
+const ABAS: { id: Aba; rotulo: string }[] = [{ id: "card", rotulo: "Card" }, { id: "entrega", rotulo: "Entrega" }, { id: "mudancas", rotulo: "Mudanças" }, { id: "historico", rotulo: "Histórico" }]
+
+/** O card da fonte (spec) em texto; vale já antes de iniciar. Títulos "# " e "## " em negrito. */
+function Card({ task }: { task: Task }) {
+  const [carregando, setCarregando] = useState(false)
+  const link = task.referencia?.match(/^https?:\/\/\S+$/)?.[0] ?? task.card?.match(/Link: (https?:\/\/[^\s·]+)/)?.[1]
+  const atualizar = async () => {
+    setCarregando(true)
+    const r = await window.fma.tasks.atualizarCard(task.id)
+    setCarregando(false)
+    if (r.ok) await carregarDetalhe(task.id); else toast.error(r.erro)
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        {link && <a href={link} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Abrir o card</a>}
+        <button onClick={() => void atualizar()} disabled={carregando} className="ml-auto rounded-md border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50">{carregando ? "Buscando..." : "Atualizar da fonte"}</button>
+      </div>
+      {task.card
+        ? <div className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{task.card.split(String.fromCharCode(10)).map((l, i) => <div key={i} className={cn(l.startsWith("#") && "font-semibold")}>{l.startsWith("#") ? l.replace(/^#+ /, "") : l || " "}</div>)}</div>
+        : <p className="text-muted-foreground">Card ainda não carregado.</p>}
+    </div>
+  )
+}
 
 export function PainelTask({ detalhe, cartas }: { detalhe: DetalheTask; cartas: Carta[] }) {
-  const [aba, setAba] = useState<Aba>("entrega")
+  const [aba, setAba] = useState<Aba>(detalhe.task.referencia ? "card" : "entrega")
   const { task } = detalhe
+  useEffect(() => { setAba(task.referencia ? "card" : "entrega") }, [task.id]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (task.situacao === "revisao") setAba("mudancas") }, [task.id, task.situacao])
   const nome = nomeadorDe(detalhe, cartas)
   const entregas = detalhe.cartas.filter((c) => !c.retirada && c.entrega)
@@ -87,13 +111,13 @@ export function PainelTask({ detalhe, cartas }: { detalhe: DetalheTask; cartas: 
         <p className="text-[11px] text-muted-foreground">Duração: {duracao(task)}</p>
       </div>
       <div role="tablist" className="flex gap-1 border-b px-3 pt-2">
-        {ABAS.map(({ id: a, rotulo }) => (
+        {ABAS.filter((x) => x.id !== "card" || task.referencia).map(({ id: a, rotulo }) => (
           <button key={a} role="tab" aria-selected={aba === a} onClick={() => setAba(a)}
             className={cn("rounded-t-md px-3 py-1.5 text-sm", aba === a ? "border-b-2 border-primary font-medium" : "text-muted-foreground hover:text-foreground")}>{rotulo}</button>
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4 text-sm">
-        {aba === "entrega" ? (
+        {aba === "card" ? <Card task={task} /> : aba === "entrega" ? (
           <div className="flex flex-col gap-4">
             {task.branch && <p className="text-xs text-muted-foreground">Branch <span className="font-mono text-foreground">{task.branch}</span>{task.prUrl && <> · <a href={task.prUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">PR</a></>}</p>}
             {fim && <section><h4 className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Relatório</h4><p className="whitespace-pre-wrap">{fim.texto}</p></section>}

@@ -38,8 +38,8 @@ export interface Ganchos {
   avisarLimiteTokens(task: Task): unknown
   /** RN 81: o Maestro chama o usuário (limite de devoluções, task que não conseguiu iniciar). */
   chamar(p: { projetoId: string; taskId: string; texto: string; acoes?: { id: "liberar" | "seguir" | "parar"; rotulo: string }[] }): unknown
-  /** Texto extra para o contexto da task (ex.: o card da fonte), lido antes das cartas rodarem. Falha ou demora (>15 s) são ignoradas. */
-  contextoExtra?(taskId: string): Promise<string>
+  /** Busca de novo o card da fonte e grava em task.card, antes das cartas rodarem. Falha ou demora (>15 s) são ignoradas. */
+  atualizarCard?(taskId: string): Promise<void>
   /** A task parou (pelo usuário, erro do motor ou commit que falhou). */
   aoParar?(taskId: string, motivo: string): unknown
   /** RN 86: o assunto da task foi resolvido fora do chat. */
@@ -204,8 +204,8 @@ ${f.contexto}`
 
 /** Contextos do projeto (fixado ao iniciar a task: vale para as que ainda vão começar) e da task, para o plano e o prompt de cada carta. */
 function blocoContexto(ctx: Ctx): string {
-  const p = ctx.projeto.contexto.trim(), t = ctx.task.contexto.trim()
-  return [p && `## Contexto do projeto\n${p}`, t && `## Contexto desta task\n${t}`].filter(Boolean).join("\n\n")
+  const p = ctx.projeto.contexto.trim(), t = ctx.task.contexto.trim(), c = ctx.task.card?.trim()
+  return [p && `## Contexto do projeto\n${p}`, t && `## Contexto desta task\n${t}`, c && `## Card da fonte (spec)\n${c}`].filter(Boolean).join("\n\n")
 }
 
 /** Contexto da task: só antes de iniciar (pronta ou na fila). */
@@ -566,13 +566,8 @@ async function comecarReservado(db: DatabaseSync, task: Task, projeto: ProjetoLi
   registrar(ctx, "missao", ctx.task.missao)
   seguro(() => ganchos.aoComecar?.(taskId))
   void (async () => {
-    const extra = await Promise.race([Promise.resolve(ganchos.contextoExtra?.(taskId)), new Promise<string>((r) => setTimeout(() => r(""), 15_000))]).catch(() => "")
-    if (extra?.trim() && !ctx.parada) {
-      ctx.task.contexto = [ctx.task.contexto.trim(), extra.trim()].filter(Boolean).join(`
-
-`)
-      db.prepare("UPDATE task SET contexto = ? WHERE id = ?").run(ctx.task.contexto, taskId)
-    }
+    await Promise.race([Promise.resolve(ganchos.atualizarCard?.(taskId)), new Promise((r) => setTimeout(r, 15_000))]).catch(() => {})
+    ctx.task.card = lerTask(db, taskId)?.card ?? ctx.task.card
     await rodarTask(ctx, iniciais)
   })()
   return { ok: true, valor: ctx.task }

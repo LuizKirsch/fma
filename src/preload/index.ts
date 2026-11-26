@@ -86,6 +86,7 @@ const api: FmaApi = {
     pedirAjuste: (taskId, texto) => ipcRenderer.invoke("tasks:pedir-ajuste", taskId, texto),
     previa: (taskId) => ipcRenderer.invoke("tasks:previa", taskId),
     reabrir: (id) => ipcRenderer.invoke("tasks:reabrir", id),
+    atualizarCard: (id) => ipcRenderer.invoke("tasks:atualizar-card", id),
     revisar: (id) => ipcRenderer.invoke("tasks:revisar", id),
     buscar: (projetoId, termo) => ipcRenderer.invoke("tasks:buscar", projetoId, termo),
     andarFila: (projetoId) => ipcRenderer.invoke("tasks:andar-fila", projetoId),
