@@ -65,6 +65,7 @@ interface Ctx {
   apontamentos: Map<string, string[]>
   voltas: Record<string, number>
   skills: Map<string, string[]> // "de>para" -> chaves das skills
+  semPergunta?: Set<string> // entregas aceitas com "Seguir mesmo assim": ninguém as questiona
   cartas: fx.CartaFluxo[]
   con: fx.ConexaoFluxo[]
   orq: string
@@ -219,15 +220,25 @@ ${f.contexto}`
   if (c.cli === "claude" && ctx.projeto.comandos.length) extras = [...extras, "--allowedTools", ...ctx.projeto.comandos.map((k) => `Bash(${k})`)]
   const conta = contaDaCarta(ctx.db, c.cli, c.contaId, amb) // a da carta (se é do ambiente do projeto), ou a padrão da CLI nele
   if (ctx.parada || ctx.travada || ctxs.get(ctx.task.id) !== ctx) return { texto: "", tokens: 0, erro: "Interrompida." } // a task parou durante a preparação
-  const exec = rodarCli(c.cli, c.modelo, prompt, ctx.task.worktree!, (linha, canal) => {
-    enviar({ tipo: "console", taskId: ctx.task.id, cartaId: id, canal, linha })
-    inserirEvento(ctx.db, { taskId: ctx.task.id, tipo: "console", deCartaId: id, paraCartaId: null, texto: linha, tokens: null })
-  }, extras, false, { env: envDaConta(conta), esforco: c.esforco, ambiente: amb })
-  ctx.execs.set(id, [...(ctx.execs.get(id) ?? []), exec])
-  enviar({ tipo: "carta", taskId: ctx.task.id, cartaId: id, estado: ctx.estado[id] ?? "trabalhando", atividade })
-  const saida = await exec.resultado
-  ctx.execs.set(id, (ctx.execs.get(id) ?? []).filter((e) => e !== exec))
-  if (conta && saida.tokens) seguro(() => somarTokensConta(ctx.db, ctx.task.id, conta.id, saida.tokens)) // uso por conta
+  const wt = ctx.task.worktree!
+  const lerSessao = () => { try { const s = JSON.parse((ctx.db.prepare("SELECT sessao FROM task_carta WHERE task_id = ? AND carta_id = ?").get(ctx.task.id, id) as { sessao: string | null } | undefined)?.sessao ?? "null") as { id: string; cwd: string } | null; return s?.cwd === wt ? s.id : undefined } catch { return undefined } } // sessão do claude é por diretório
+  const gravarSessao = (v: string | null) => ctx.db.prepare("UPDATE task_carta SET sessao = ? WHERE task_id = ? AND carta_id = ?").run(v, ctx.task.id, id)
+  const rodar1 = async (retomar?: string) => {
+    const exec = rodarCli(c.cli, c.modelo, prompt, wt, (linha, canal) => {
+      enviar({ tipo: "console", taskId: ctx.task.id, cartaId: id, canal, linha })
+      inserirEvento(ctx.db, { taskId: ctx.task.id, tipo: "console", deCartaId: id, paraCartaId: null, texto: linha, tokens: null })
+    }, extras, false, { env: envDaConta(conta), esforco: c.esforco, ambiente: amb, retomar })
+    ctx.execs.set(id, [...(ctx.execs.get(id) ?? []), exec])
+    enviar({ tipo: "carta", taskId: ctx.task.id, cartaId: id, estado: ctx.estado[id] ?? "trabalhando", atividade })
+    const s = await exec.resultado
+    ctx.execs.set(id, (ctx.execs.get(id) ?? []).filter((e) => e !== exec))
+    if (conta && s.tokens) seguro(() => somarTokensConta(ctx.db, ctx.task.id, conta.id, s.tokens)) // uso por conta
+    return s
+  }
+  const antes = c.cli === "claude" ? lerSessao() : undefined
+  let saida = await rodar1(antes)
+  if (antes && saida.erro && /conversation|session/i.test(saida.erro) && !ctx.parada) { seguro(() => gravarSessao(null)); saida = await rodar1() } // retomada falhou: uma vez sem --resume
+  if (saida.sessao) seguro(() => gravarSessao(JSON.stringify({ id: saida.sessao, cwd: wt })))
   return saida
 }
 
@@ -668,6 +679,7 @@ async function executar(ctx: Ctx, id: string): Promise<Fim> {
     const valido = () => !ctx.parada && !ctx.travada && ctx.geracao[id] === gen
     // trabalho próprio (o Revisor só questiona, RN 68)
     if (c.classe !== "revisor") {
+      ctx.semPergunta?.delete(id)
       marcar(ctx, id, "trabalhando", `Trabalhando: ${curto(ctx.tarefas.get(id) ?? "")}`)
       registrar(ctx, "trabalho", ctx.tarefas.get(id) ?? "", id)
       const s = await rodarCarta(ctx, id, entrada(ctx, id), `Trabalhando: ${curto(ctx.tarefas.get(id) ?? "")}`)
@@ -688,31 +700,42 @@ async function executar(ctx: Ctx, id: string): Promise<Fim> {
     // RF 6.23: questiona cada carta ligada, na ordem
     for (const q of fx.quemQuestiona(id, ctx.con)) {
       if (!ctx.entregas.has(q.para)) { registrar(ctx, "aviso", `${nome(ctx, q.para)} não entregou nada para ${c.nome} questionar.`, id, q.para); continue }
-      marcar(ctx, id, "questionando", `Perguntando a ${nome(ctx, q.para)}`)
+      if (ctx.semPergunta?.has(q.para)) { ctx.semPergunta.delete(q.para); registrar(ctx, "aviso", `${c.nome} não questiona a entrega de ${nome(ctx, q.para)}: você escolheu seguir mesmo assim.`, id, q.para); continue }
       const chaves = ctx.skills.get(`${q.de}>${q.para}`) ?? []
-      const perguntas = chaves.length ? chaves.map((k) => perguntaDaSkill(k)) : ["Por que você fez estas escolhas? O que ficou sem tratar?"] // RF 6.24
-      const texto = perguntas.map((p, i) => `${i + 1}. ${p}`).join("\n")
-      registrar(ctx, "pergunta", texto, id, q.para)
       const alvo = ctx.copias.get(q.para)!
-      const r = await rodarCarta(ctx, q.para, [
-        alvo.prompt,
-        `---\n## Sua entrega anterior\n${ctx.entregas.get(q.para)}`,
-        `## Perguntas de ${c.nome}\n${texto}`,
-        "Responda de forma objetiva. Se encontrar uma falha, diga qual e corrija nos arquivos.",
-      ].join("\n\n"), `Respondendo a ${c.nome}`)
-      if (!valido()) return { t: "ok" }
-      if (r.erro) return { t: "erro", alvo: q.para, msg: `${alvo.nome}: ${r.erro}` }
-      registrar(ctx, "resposta", r.texto, q.para, id, r.tokens)
-      const hook = await commitarCarta(ctx, q.para, `fma(task ${ctx.task.numero}): ${alvo.nome} responde a ${c.nome}`)
-      if (!valido()) return { t: "ok" }
-      if (hook) return { t: "trava", alvo: q.para, q: q.para, motivo: hook }
+      // Com skills há pergunta específica (RF 6.24); sem elas o questionador julga a entrega direto, sem rodada extra de pergunta/resposta (economiza uma chamada por carta).
+      let r: { texto: string; tokens: number } | null = null, texto = ""
+      if (chaves.length) {
+        marcar(ctx, id, "questionando", `Perguntando a ${nome(ctx, q.para)}`)
+        texto = chaves.map((k, i) => `${i + 1}. ${perguntaDaSkill(k)}`).join("\n")
+        registrar(ctx, "pergunta", texto, id, q.para)
+        const rr = await rodarCarta(ctx, q.para, [
+          alvo.prompt,
+          `---
+## Sua entrega anterior
+${ctx.entregas.get(q.para)}`,
+          `## Perguntas de ${c.nome}
+${texto}`,
+          "Responda de forma objetiva. Se encontrar uma falha, diga qual e corrija nos arquivos.",
+        ].join("\n\n"), `Respondendo a ${c.nome}`)
+        if (!valido()) return { t: "ok" }
+        if (rr.erro) return { t: "erro", alvo: q.para, msg: `${alvo.nome}: ${rr.erro}` }
+        r = rr
+        registrar(ctx, "resposta", r.texto, q.para, id, r.tokens)
+        const hook = await commitarCarta(ctx, q.para, `fma(task ${ctx.task.numero}): ${alvo.nome} responde a ${c.nome}`)
+        if (!valido()) return { t: "ok" }
+        if (hook) return { t: "trava", alvo: q.para, q: q.para, motivo: hook }
+      } else marcar(ctx, id, "questionando", `Avaliando a entrega de ${nome(ctx, q.para)}`)
       const j = await rodarCarta(ctx, id, [
         c.prompt,
-        `---\n## Entrega de ${alvo.nome}\n${ctx.entregas.get(q.para)}`,
-        `## Suas perguntas\n${texto}`,
-        `## Resposta de ${alvo.nome}\n${r.texto}`,
-        'A resposta se sustenta? Responda SOMENTE com JSON: {"veredito": "aprovado" | "devolver", "apontamentos": "o que corrigir, se devolver"}.',
-      ].join("\n\n"), `Julgando a resposta de ${alvo.nome}`)
+        `---
+## Entrega de ${alvo.nome}
+${ctx.entregas.get(q.para)}`,
+        ...(r ? [`## Suas perguntas
+${texto}`, `## Resposta de ${alvo.nome}
+${r.texto}`] : []),
+        `${r ? "A resposta se sustenta?" : "A entrega atende ao pedido?"} Responda SOMENTE com JSON: {"veredito": "aprovado" | "devolver", "apontamentos": "o que corrigir, se devolver"}.`,
+      ].join("\n\n"), `Julgando ${r ? "a resposta" : "a entrega"} de ${alvo.nome}`)
       if (!valido()) return { t: "ok" }
       if (j.erro) return { t: "erro", alvo: id, msg: `${c.nome}: ${j.erro}` }
       const v = extrairJson(j.texto)
@@ -980,7 +1003,7 @@ async function voltarComAjuste(db: DatabaseSync, task: Task, projeto: ProjetoLid
   } catch (e) { return { ok: false, erro: `Não consegui recriar o worktree: ${(e as Error).message}` } }
   emTransacao(db, () => {
     db.prepare("UPDATE task SET situacao = 'andamento', fila_em = NULL, worktree = ?, encerrada_em = NULL WHERE id = ?").run(wt, taskId)
-    db.prepare("UPDATE task_carta SET estado = 'espera', atividade = 'Refazendo com o ajuste', concluida = 0, tarefa = NULL, voltas = 0 WHERE task_id = ?").run(taskId)
+    db.prepare("UPDATE task_carta SET estado = 'espera', atividade = 'Refazendo com o ajuste', concluida = 0, tarefa = NULL, voltas = 0, sessao = NULL WHERE task_id = ?").run(taskId)
   })
   await retomar(db, avisarTask(db, taskId), task.ajustes.split("\n").pop()!)
   emitirFila(db, projeto.id)
@@ -1105,6 +1128,7 @@ export function seguirMesmoAssim(db: DatabaseSync, taskId: string): Resultado<Ta
   const { cartaId, questionadorId, motivo } = task.decisao
   if (cartaId !== questionadorId) return { ok: false, erro: "Só dá para seguir quando uma carta travou." }
   registrar(ctx, "aviso", `Pendência: ${motivo} Você escolheu seguir mesmo assim.`, cartaId)
+  ;(ctx.semPergunta ??= new Set()).add(cartaId)
   marcar(ctx, cartaId, "concluida", "Concluída com pendência")
   ctx.travada = false
   salvarTask(ctx, { situacao: "andamento", decisao_motivo: null, decisao_carta_id: null, decisao_questionador_id: null, decisoes: [task.decisoes, decisaoSeguir(motivo)].filter(Boolean).join("\n") })

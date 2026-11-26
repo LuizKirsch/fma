@@ -55,13 +55,15 @@ export interface Execucao {
 /** Argumentos extras (config MCP, RF 4.14): no Windows o shell junta sem escapar, então cita o que tem espaço ou aspas. */
 const citar = (a: string) => (WIN && /[\s"&|<>^()]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)
 
-export function rodarCli(cli: string, modelo: string, prompt: string, cwd: string, aoConsole: (linha: string, canal: "stdout" | "stderr") => void, extras: string[] = [], leitura = false, conta: { env?: Record<string, string>; esforco?: Esforco; ambiente?: string } = {}): Execucao {
+export function rodarCli(cli: string, modelo: string, prompt: string, cwd: string, aoConsole: (linha: string, canal: "stdout" | "stderr") => void, extras: string[] = [], leitura = false, conta: { env?: Record<string, string>; esforco?: Esforco; ambiente?: string; retomar?: string } = {}): Execucao {
   let filho: ChildProcess | undefined
   let parado = false
   const resultado = new Promise<Saida>((ok) => {
     const falha = (erro: string) => ok({ texto: "", tokens: 0, erro })
     try {
       const { comando, args } = argsDaCli(cli, modelo, leitura, conta.esforco)
+      // ponytail: só o claude retoma sessão; codex precisaria de `exec resume <id>` (sem --sandbox) e fica como está.
+      if (cli === "claude" && conta.retomar && MODELO_OK.test(conta.retomar)) args.push("--resume", conta.retomar)
       const amb = conta.ambiente ?? LOCAL
       const a = comandoEm(amb, comando, [...args, ...extras.map((x) => (ehWsl(amb) ? x : citar(x)))], { cwd, env: conta.env, shell: true })
       filho = spawn(a.comando, a.args, { cwd: a.cwd, env: a.env, shell: a.shell, windowsHide: true, detached: !WIN, stdio: ["pipe", "pipe", "pipe"] })

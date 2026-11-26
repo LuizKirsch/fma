@@ -4,7 +4,7 @@
  * - codex exec --json: linhas JSON; `item.completed` com agent_message e `turn.completed` com o uso.
  * - gemini -p: texto puro; sem contagem de tokens, então estimamos (1 token ~ 4 caracteres).
  */
-export interface Saida { texto: string; tokens: number; erro: string | null }
+export interface Saida { texto: string; tokens: number; erro: string | null; sessao?: string }
 
 const json = (l: string): any => { try { return JSON.parse(l) } catch { return null } }
 
@@ -15,7 +15,7 @@ export function lerSaida(cli: string, bruto: string, entrada = ""): Saida {
     if (!r) return { texto: "", tokens: 0, erro: "A CLI não devolveu resultado." }
     const u = r.usage ?? {}
     const tokens = (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
-    return { texto: String(r.result ?? ""), tokens, erro: r.is_error ? String(r.result || "Erro na CLI.") : null }
+    return { texto: String(r.result ?? ""), tokens, ...(r.session_id ? { sessao: String(r.session_id) } : {}), erro: r.is_error ? String(r.result || "Erro na CLI.") : null }
   }
   if (cli === "codex") {
     let texto = "", tokens = 0, erro: string | null = null

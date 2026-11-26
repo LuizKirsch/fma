@@ -198,6 +198,10 @@ const MIGRACOES: string[] = [
   ALTER TABLE task ADD COLUMN decisoes TEXT NOT NULL DEFAULT '';
   ALTER TABLE projeto ADD COLUMN pastas_compartilhadas TEXT;
   `,
+  // Sessão da CLI por (task, carta): JSON {id, cwd}, para retomar em vez de reler o repositório.
+  `
+  ALTER TABLE task_carta ADD COLUMN sessao TEXT;
+  `,
   // Próxima migração: item novo AQUI no fim.
 ]
 
