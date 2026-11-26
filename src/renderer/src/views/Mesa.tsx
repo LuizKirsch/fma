@@ -485,7 +485,7 @@ export function Mesa({ projeto, forjar, avisoMaestro, atividades }: { projeto: P
             {fluxo.avisos.length + (avisoGit ? 1 : 0) > 0 && <Badge variant="secondary" className="text-warning">{fluxo.avisos.length + (avisoGit ? 1 : 0)}</Badge>}
           </Button>
           {painel && (
-            <div className="min-h-0 w-80 flex-1 overflow-hidden rounded-xl border bg-card/95 shadow-xl backdrop-blur">
+            <div className="min-h-0 w-80 shrink overflow-y-auto overscroll-contain rounded-xl border bg-card/95 shadow-xl backdrop-blur">
               <PainelMesa fluxo={fluxo} extras={avisoGit ? [avisoGit] : []} vazia={mesa.cartas.length === 0} conexoes={lista} nome={nome} selecionada={selecionada} aoSelecionar={setSelecionada}
                 aoAtualizar={(id, m) => void atualizar(id, m)} aoOrdem={async (id, d) => tratar(await window.fma.mesa.moverOrdem(id, d))}
                 aoRemover={async (id) => { tratar(await window.fma.mesa.removerConexao(id)); setSelecionada(null) }} />

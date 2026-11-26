@@ -26,7 +26,7 @@ export function PainelMesa({ extras = [], fluxo, vazia, conexoes, nome, selecion
 }) {
   const irmas = (c: Conexao) => conexoes.filter((o) => o.deCartaId === c.deCartaId && o.tipo === c.tipo)
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
+    <div className="flex flex-col gap-4 p-4">
       <section className="flex flex-col gap-2">
         <h3 className="font-display text-sm">Fluxo</h3>
         {vazia ? (
