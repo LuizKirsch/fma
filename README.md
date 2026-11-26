@@ -1,15 +1,16 @@
-# tako
+# fma
 
-Orquestrador de agentes de IA para desenvolvimento. Os cards chegam de boards por MCP, passam por um fluxo configurável por projeto e cada um roda num git worktree próprio, com agentes como Claude Code, Codex CLI, Gemini CLI e Ollama.
+FMA (Fantasy Multi Agents): orquestrador de agentes de IA para desenvolvimento, em formato de jogo de cartas. Cada agente é uma carta com classe, IA, método, skills e prompt; cada projeto é uma mesa onde as cartas se ligam; as demandas chegam de um board por MCP e viram tasks trabalhadas pelo time.
 
-App desktop para Windows, macOS e Linux. Documentação e requisitos no vault do projeto (prefixo `TAK`).
+App desktop para Windows, macOS e Linux. Documentação e requisitos no vault do projeto (prefixo `FMA`).
 
 ## Stack
 
-- Node.js + TypeScript
-- Electron (o mesmo Chromium nas três plataformas)
-- `electron-builder` para gerar os instaladores
-- SDK oficial de MCP (`@modelcontextprotocol/sdk`)
+- Electron + TypeScript, com build pelo `electron-vite`
+- Interface em React 19, Tailwind v4 e componentes shadcn/ui, com o visual do protótipo LMA v13
+- Banco local em SQLite (`node:sqlite`, que já vem no Electron)
+- As cartas rodam nas CLIs de código instaladas no computador: Claude Code, Codex CLI ou Gemini CLI
+- SDK oficial de MCP (`@modelcontextprotocol/sdk`) para os boards e as ferramentas
 
 ## Rodar
 
@@ -17,27 +18,31 @@ Precisa do Node.js 22.12 ou mais novo.
 
 ```bash
 npm install
-npm start
+npm run dev       # abre o app com recarga automática da interface
 ```
 
-## Gerar o instalador
+Outros comandos:
 
 ```bash
-npm run dist          # para o sistema atual
-npm run dist:win      # Windows (NSIS)
-npm run dist:mac      # macOS (DMG)
-npm run dist:linux    # Linux (AppImage e deb)
+npm run build     # compila para out/
+npm start         # abre o app compilado
+npm run typecheck # confere os tipos
+npm run dist      # gera o instalador do sistema atual (também dist:win, dist:mac, dist:linux)
 ```
 
-Os arquivos saem em `release/`.
+O banco fica na pasta de dados do app (no Windows, `%APPDATA%/fma/fma.db`).
 
 ## Estrutura
 
 ```
 src/
-  main/       processo principal: o núcleo, com acesso ao sistema
-  preload/    ponte segura entre a interface e o núcleo (window.tako)
-  renderer/   interface (HTML, CSS e TypeScript)
-  shared/     tipos usados pelos dois lados
-scripts/      tarefas de build em Node, iguais em qualquer sistema
+  main/       núcleo: janela, banco, CLIs e a API que a interface chama
+  preload/    ponte segura que expõe window.fma para a interface
+  renderer/   interface em React (index.html e src/)
+  shared/     catálogo, tipos e regras usados pelos dois lados
 ```
+
+## O que já funciona
+
+- Coleção de cartas: forjar (classes fixas e Coringa), editar, duplicar e excluir, tudo salvo no banco
+- Detecção das CLIs instaladas na forja

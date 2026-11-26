@@ -1,16 +1,22 @@
 {
-  // Interface: roda na janela do Electron (Chromium), sem acesso ao Node.
+  // Interface: React dentro da janela do Electron, sem acesso ao Node.
   "compilerOptions": {
     "target": "ES2023",
-    "module": "ES2022",
+    "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": [],
-    "rootDir": "src",
-    "outDir": "dist",
+    "types": ["vite/client"],
+    "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
-    "sourceMap": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@/*": ["./src/renderer/src/*"],
+      "@shared/*": ["./src/shared/*"]
+    }
   },
-  "include": ["src/renderer/**/*.ts", "src/shared/**/*.d.ts"]
+  "include": ["src/renderer/src/**/*.ts", "src/renderer/src/**/*.tsx", "src/shared/**/*.ts"],
+  "exclude": ["src/shared/**/*.check.ts"]
 }

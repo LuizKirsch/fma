@@ -1,17 +1,11 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="dark">
 <head>
-  <meta charset="UTF-8">
-  <!-- Só carrega arquivos do próprio app: nada de script de fora. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
-  <title>Tako</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8" />
+    <title>FMA</title>
 </head>
 <body>
-  <main class="hello">
-    <h1>Tako</h1>
-    <p id="info">Carregando…</p>
-  </main>
-  <script type="module" src="renderer.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

@@ -1,11 +1,11 @@
-# Empacotamento do Tako para as três plataformas (Decisão - App Desktop com Electron).
-appId: dev.luizkirsch.tako
-productName: Tako
+# Empacotamento do FMA para as três plataformas (Decisão - App Desktop com Electron).
+appId: dev.luizkirsch.fma
+productName: FMA
 directories:
   output: release
   buildResources: build
 files:
-  - dist/**
+  - out/**
   - package.json
 
 win:

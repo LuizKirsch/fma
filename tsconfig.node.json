@@ -1,17 +1,17 @@
 {
-  // Processo principal e preload: rodam no Node do Electron.
+  // Núcleo e preload: rodam no Node do Electron. Só checagem de tipos; quem compila é o electron-vite.
   "compilerOptions": {
     "target": "ES2023",
-    "module": "node16",
-    "moduleResolution": "node16",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": ["ES2023"],
     "types": ["node"],
-    "rootDir": "src",
-    "outDir": "dist",
     "strict": true,
-    "esModuleInterop": true,
     "skipLibCheck": true,
-    "sourceMap": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "paths": { "@shared/*": ["./src/shared/*"] }
   },
-  "include": ["src/main/**/*.ts", "src/preload/**/*.ts"]
+  "include": ["electron.vite.config.ts", "src/main/**/*.ts", "src/preload/**/*.ts", "src/shared/**/*.ts"]
 }
