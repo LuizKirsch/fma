@@ -6,7 +6,7 @@
  */
 import type { DatabaseSync } from "node:sqlite"
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
-import { caminhos, paraFs, rodar } from "../ambiente"
+import { caminhos, ehWsl, LOCAL, paraFs, rodar } from "../ambiente"
 import { promptFinal } from "@shared/carta"
 import { pastaValida } from "@shared/projeto"
 import { cliPorId, type CliId } from "@shared/ia"
@@ -902,7 +902,16 @@ export async function aceitarTask(db: DatabaseSync, taskId: string, modo: "pr" |
       const titulo = `${task.referencia ? `${task.referencia}: ` : ""}${task.titulo || task.missao.split("\n")[0].slice(0, 80)}`.slice(0, 200)
       await git(repo, ["push", "-u", "origin", branch], amb)
       let saida: string
-      try { saida = await rodar(amb, "gh", ["pr", "create", "--base", base, "--head", branch, "--title", titulo, "--body-file", "-"], { cwd: repo, input: relatorio, timeout: 60_000 }) } catch (e) {
+      const args = ["pr", "create", "--base", base, "--head", branch, "--title", titulo, "--body-file", "-"]
+      // Projeto WSL sem gh no WSL: usa o gh do Windows apontando o repositório (owner/repo do remote origin).
+      const criarPr = () => rodar(amb, "gh", args, { cwd: repo, input: relatorio, timeout: 60_000 }).catch(async (e: Error) => {
+        if (!ehWsl(amb) || !/gh: (command )?not found|command not found: gh/i.test(e.message)) throw e
+        const remoto = await git(repo, ["remote", "get-url", "origin"], amb)
+        const dono = /github\.com[:/]([^/]+\/[^/\s]+?)(?:\.git)?\/?$/.exec(remoto.trim())?.[1]
+        if (!dono) throw new Error(`O gh não está instalado no WSL e o remote não é do GitHub (${remoto.trim()}). Instale com: sudo apt install gh && gh auth login`)
+        return rodar(LOCAL, "gh", [...args, "--repo", dono], { input: relatorio, timeout: 60_000 })
+      })
+      try { saida = await criarPr() } catch (e) {
         if (!/already exists/i.test((e as Error).message) || !/https:\/\/\S+\/pull\/\d+/.test((e as Error).message)) throw e
         saida = (e as Error).message // já há PR desta branch: segue com a URL dele
       }
