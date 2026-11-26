@@ -14,7 +14,7 @@ import type { MensagemDireta } from "./conversa"
 import type { ResumoConclusao, ResumoProjeto } from "./geral"
 import type { EstadoChat, EventoMaestro, MensagemChat, ResultadoMaestro } from "./maestro"
 import type { AgenteLoja, ItemBiblioteca, NovoItem, OrigemLoja, TipoItem } from "./biblioteca"
-import type { Fonte, McpDaClaude, NovaFonte, ProjetoDaFonte, TaskDaFonte } from "./fonte"
+import type { Fonte, FerramentaDoServidor, MapaMcp, McpDaClaude, NovaFonte, ProjetoDaFonte, TaskDaFonte } from "./fonte"
 import type { AjustesProjeto, NovoProjeto, PreferenciasMesa, Projeto, Repositorio, UsoDaCarta } from "./projeto"
 
 export interface PromptAdicional {
@@ -232,8 +232,8 @@ export interface FmaApi {
     remover(id: string): Promise<Resultado<null>>
     /** Confere a conexão; o valor é uma frase curta do que foi encontrado. */
     testar(id: string): Promise<Resultado<string>>
-    /** Nomes das ferramentas de um servidor MCP ainda não salvo (formulário do MCP próprio). */
-    ferramentas(config: Record<string, unknown>): Promise<Resultado<string[]>>
+    /** Ferramentas (com o schema dos argumentos) de um servidor MCP ainda não salvo e o mapeamento automático (formulário do MCP próprio). */
+    ferramentas(config: Record<string, unknown>): Promise<Resultado<{ tools: FerramentaDoServidor[]; mapa: MapaMcp }>>
     projetos(id: string): Promise<Resultado<ProjetoDaFonte[]>>
     tasks(id: string, projetoId: string): Promise<Resultado<TaskDaFonte[]>>
     /** Traz as tasks abertas do projeto da fonte que ainda não viraram task; o valor é quantas vieram. */

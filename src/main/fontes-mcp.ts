@@ -1,14 +1,16 @@
 /**
- * Fonte de tasks por servidor MCP próprio: o usuário diz as ferramentas (tasks, projetos, e opcionalmente mover/comentar).
+ * Fonte de tasks por servidor MCP próprio: as ferramentas (lista, detalhe, mover, comentar) e os nomes dos argumentos
+ * são descobertos do tools/list (mapearFerramentas/argumentosDe, em @shared/fonte); o usuário só pode trocar a ferramenta.
  * Se a ferramenta não existir no servidor, o erro lista o que ele expõe. Os argumentos que o servidor
- * não declara no schema da ferramenta são descartados.
+ * não declara no schema da ferramenta são descartados. Tudo que vem do servidor passa por `mascarar` (segredos).
  */
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { COLUNA_PRONTA, type ProjetoDaFonte, type TaskDaFonte, type TipoFonte } from "@shared/fonte"
+import { argumentosDe, COLUNA_PRONTA, mapearFerramentas, type FerramentaDoServidor, type MapaMcp, type PapelMcp, type ProjetoDaFonte, type TaskDaFonte, type TipoFonte } from "@shared/fonte"
 import { comCliente } from "./apoio/mcp"
+import { mascarar } from "./ambiente"
 
 type Obj = Record<string, any>
-type Tool = { name: string; inputSchema?: { properties?: Record<string, unknown> } }
+type Tool = FerramentaDoServidor
 
 /** Lê `a.b.c` num objeto (chaves com ponto, como "System.Title", e maiúsculas/minúsculas são toleradas). */
 export function ler(o: unknown, caminho: string): unknown {
@@ -54,7 +56,7 @@ export function extrairLista(saida: string): Obj[] {
   return acha(j, 0) ?? []
 }
 
-export const FECHADA = /^(done|closed|resolved|removed|cancel+ed|conclu[ií]d[ao]s?|fechad[ao]s?|resolvid[ao]s?|cancelad[ao]s?)$/i
+export const FECHADA = /^(done|closed|resolved|removed|cancel+ed|finalizad[ao]s?|rejeitad[ao]s?|conclu[ií]d[ao]s?|fechad[ao]s?|resolvid[ao]s?|cancelad[ao]s?)$/i
 
 interface Contexto { c: Client; tools: Tool[]; extra: Obj }
 interface Lida { o: Obj; ref: string; status: string; fechada: boolean }
@@ -76,18 +78,23 @@ interface Perfil {
   tasks(x: Contexto, projetoId: string): Promise<Lida[]>
 }
 
-/** MCP próprio: o usuário diz as ferramentas. Sem ferramenta de projetos, a fonte vira um projeto só ("*"). */
+/** Ferramentas escolhidas: a troca do usuário (config.ferramentas), senão o campo antigo, senão a descoberta automática. */
+function mapaDe(x: Contexto, config: Obj): MapaMcp {
+  const auto = mapearFerramentas(x.tools), f = (config.ferramentas ?? {}) as Obj, velho: Obj = { lista: config.ferramentaTasks, mover: config.ferramentaMover, comentar: config.ferramentaComentar }
+  const m: MapaMcp = {}
+  for (const p of ["lista", "detalhe", "mover", "comentar"] as PapelMcp[]) m[p] = String(f[p] || velho[p] || auto[p] || "").trim() || undefined
+  return m
+}
+const filtroDe = (config: Obj): Obj => Object.fromEntries(Object.entries((config.filtro ?? {}) as Obj).filter(([, v]) => String(v ?? "").trim()).map(([k, v]) => [k, String(v).trim()]))
+
+/** MCP próprio: a ferramenta de lista (com o filtro do usuário) devolve as tasks; a fonte é um projeto só ("*"), o filtro já recorta. */
 function generico(config: Obj): Perfil {
-  const fTasks = String(config.ferramentaTasks ?? "").trim(), fProj = String(config.ferramentaProjetos ?? "").trim()
-  const arg = String(config.argProjeto ?? "").trim() || "project"
   return {
-    async projetos(x) {
-      if (!fProj) return [{ id: "*", titulo: "Todas as tasks" }]
-      const l = extrairLista(await chamar(x, [fProj], {}))
-      return l.map((p) => ({ id: String(primeiro(p, "key", "id", "name") ?? ""), titulo: String(primeiro(p, "name", "title", "key", "id") ?? "") })).filter((p) => p.id)
-    },
-    async tasks(x, projetoId) {
-      const l = extrairLista(await chamar(x, [fTasks], projetoId === "*" ? {} : { [arg]: projetoId }))
+    async projetos() { return [{ id: "*", titulo: "Todas as tasks" }] },
+    async tasks(x) {
+      const lista = mapaDe(x, config).lista
+      if (!lista) throw new Error(`O servidor não tem uma ferramenta que liste tasks (buscar_*, listar_*...). Ele expõe: ${x.tools.map((k) => k.name).join(", ") || "nenhuma"}.`)
+      const l = extrairLista(await chamar(x, [lista], filtroDe(config)))
       return l.map((o) => {
         const status = String(primeiro(o, "fields.status.name", "status.name", "status", "state", "situacao") ?? "")
         return { o, ref: String(primeiro(o, "key", "ref", "id", "number", "codigo") ?? ""), status, fechada: FECHADA.test(status) }
@@ -125,8 +132,11 @@ function comServidor<T>(config: Obj, fn: (x: Contexto) => Promise<T>): Promise<T
   })
 }
 
-/** Nomes das ferramentas do servidor, para o formulário do MCP próprio. */
-export const ferramentasMcp = (config: Obj) => comServidor(config, async (x) => x.tools.map((t) => t.name))
+/** Ferramentas do servidor (nome + schema, sem descrições longas) e o mapeamento automático, para o formulário do MCP próprio. */
+export const ferramentasMcp = (config: Obj) => comServidor(config, async (x) => ({
+  tools: x.tools.map((t) => ({ name: t.name, inputSchema: { properties: Object.fromEntries(Object.entries(t.inputSchema?.properties ?? {}).map(([k, p]) => [k, { type: p.type, anyOf: p.anyOf?.map((a) => ({ type: a.type })), description: p.description?.slice(0, 120) }])), required: t.inputSchema?.required } })),
+  mapa: mapearFerramentas(x.tools),
+}))
 
 export const testarMcp = (config: Obj) =>
   comServidor(config, async (x) => `${x.tools.length} ferramentas: ${x.tools.slice(0, 8).map((t) => t.name).join(", ")}${x.tools.length > 8 ? "…" : ""}`)
@@ -137,8 +147,8 @@ function paraTask(p: Lida, pronta: string): TaskDaFonte {
   const url = primeiro(p.o, "url", "_links.html.href")
   return {
     ref: p.ref,
-    titulo: String(primeiro(p.o, "fields.summary", "fields.System.Title", "System.Title", "title", "summary", "name") ?? p.ref),
-    descricao: texto(primeiro(p.o, "fields.description", "fields.System.Description", "System.Description", "description")),
+    titulo: mascarar(String(primeiro(p.o, "fields.summary", "fields.System.Title", "System.Title", "title", "summary", "name") ?? p.ref)),
+    descricao: mascarar(texto(primeiro(p.o, "fields.description", "fields.System.Description", "System.Description", "description"))),
     url: typeof url === "string" ? url : undefined,
     pronta: p.status.trim().toLowerCase() === pronta.trim().toLowerCase(),
   }
@@ -148,9 +158,19 @@ function paraTask(p: Lida, pronta: string): TaskDaFonte {
 export const tasksMcp = (tipo: TipoFonte, config: Obj, projetoId: string, comFechadas = false): Promise<TaskDaFonte[]> =>
   comServidor(config, async (x) => (await perfil(tipo, config).tasks(x, projetoId)).filter((t) => (comFechadas || !t.fechada) && t.ref).map((t) => paraTask(t, colunaPronta(config))))
 
-/** Escrita de volta no MCP próprio: chama `ferramenta` com os argumentos (só os que o schema dela declara). */
-export const chamarFerramentaMcp = (config: Obj, ferramenta: string, args: Obj): Promise<string> =>
-  comServidor(config, (x) => chamar(x, [ferramenta], args))
+/**
+ * Escrita/leitura de um card pelas ferramentas descobertas. `mover`/`comentar` devolvem false se o servidor não tem a ferramenta
+ * (o chamador avisa); `detalhe` devolve o texto mascarado (até ~12 KB) ou null.
+ */
+export const usarFerramentaMcp = (config: Obj, papel: "mover" | "comentar" | "detalhe", ref: string, valor = ""): Promise<string | null | false> =>
+  comServidor(config, async (x) => {
+    const nome = mapaDe(x, config)[papel]
+    if (!nome) return papel === "detalhe" ? null : false
+    const a = argumentosDe(x.tools.find((t) => t.name === nome))
+    const campo = papel === "mover" ? a.coluna : papel === "comentar" ? a.texto : undefined
+    const saida = await chamar(x, [nome], { [a.id ?? "id"]: ref, ...(campo ? { [campo]: valor } : {}) })
+    return papel === "detalhe" ? mascarar(saida).slice(0, 12_000) : saida
+  })
 
 /** Projetos com o total de tasks abertas e quantas estão prontas. ponytail: conta até 100 tasks por projeto, no máximo 30 projetos. */
 export const projetosMcp = (tipo: TipoFonte, config: Obj): Promise<ProjetoDaFonte[]> =>

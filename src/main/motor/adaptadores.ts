@@ -13,6 +13,7 @@ import type { DepsApoio } from "../apoio/ports"
 import { eventosApoio } from "../apoio/ports"
 import { ferramentasDaCarta } from "../apoio/ferramentas"
 import type { DepsMonitor } from "../monitores/ports"
+import { contextoDaFonte, moverNaFonte } from "../fontes"
 import { aoComecar, aoConcluir, aoParar, aoTravar } from "../monitores/servico"
 import type { Task } from "@shared/task"
 import { lerTask, lerTaskCartas, listarTasks } from "./dados"
@@ -116,8 +117,9 @@ export function criarDepsMonitor(db: DatabaseSync): DepsMonitor {
  */
 export function ligarIntegracoes(db: DatabaseSync, maestro: Maestro): () => void {
   motor.ligarGanchos({
-    aoComecar: (id) => aoComecar(db, id),
-    aoConcluir: (id) => aoConcluir(db, id, { prUrl: lerTask(db, id)?.prUrl ?? undefined }),
+    aoComecar: async (id) => { await aoComecar(db, id); await moverNaFonte(db, id, "aoComecar") },
+    aoConcluir: async (id) => { await aoConcluir(db, id, { prUrl: lerTask(db, id)?.prUrl ?? undefined }); await moverNaFonte(db, id, "aoAceitar") },
+    contextoExtra: (id) => contextoDaFonte(db, id),
     aoParar: (id, m) => aoParar(db, id, m),
     aoTravar: (id, duvida) => aoTravar(db, id, duvida),
     ferramentasDaCarta: (p) => ferramentasDaCarta(db, p),

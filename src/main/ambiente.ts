@@ -52,7 +52,9 @@ export function comando(amb: string, cmd: string, args: string[], o: OpcoesComan
 }
 
 const SEGREDO = /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w+|sk-[A-Za-z0-9_-]{16,}|xox[abp]-[\w-]+|Bearer\s+[\w.~+/=-]{16,})/g
-export const mascarar = (t: string) => t.replace(SEGREDO, "***")
+/** Pares "chave: valor" de credencial em texto livre (cards, comentários): mantém a chave, troca o valor. */
+const CREDENCIAL = /\b((?:senha|password|pass|pwd|secret|client_?secret|clientsecret|token|api[_-]?key)["']?\s*[:=]\s*)\S+/gi
+export const mascarar = (t: string) => t.replace(SEGREDO, "***").replace(CREDENCIAL, "$1***")
 
 /** Roda e devolve a saída; rejeita com a mensagem do stderr (e o início do stdout, onde o git põe "CONFLICT"). `input` vai pela stdin. */
 export function rodar(amb: string, cmd: string, args: string[], o: OpcoesComando & { input?: string; timeout?: number } = {}): Promise<string> {

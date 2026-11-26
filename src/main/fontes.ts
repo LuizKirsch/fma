@@ -8,8 +8,8 @@ import type { DatabaseSync } from "node:sqlite"
 import { COLUNA_PRONTA, type Fonte, type NovaFonte, type ProjetoDaFonte, type TaskDaFonte } from "@shared/fonte"
 import type { Resultado } from "@shared/tipos"
 import { graphqlGithub } from "./monitores/conector"
-import { projetosMcp, servidorDe, tasksMcp, testarMcp, ferramentasMcp } from "./fontes-mcp"
-import { criarTask, definirContextoTask } from "./motor/motor"
+import { projetosMcp, servidorDe, tasksMcp, testarMcp, ferramentasMcp, usarFerramentaMcp } from "./fontes-mcp"
+import { criarTask, definirContextoTask, registrarEvento } from "./motor/motor"
 import { listarMcpsDaClaude } from "./claude-mcp"
 
 type Cfg = Record<string, unknown>
@@ -24,7 +24,6 @@ const lerFonte = (db: DatabaseSync, id: string) => listarFontes(db).find((f) => 
 function validar(n: NovaFonte): string | null {
   if (n.tipo === "lupito") return "O MCP Lupito chega quando a especificação existir."
   if (!["github", "mcp"].includes(n.tipo)) return "Tipo de fonte desconhecido."
-  if (n.tipo === "mcp" && !String(n.config.ferramentaTasks ?? "").trim()) return "Informe a ferramenta que lista as tasks."
   if (!n.rotulo.trim()) return "Dê um nome à fonte."
   if (n.tipo !== "github") try { servidorDe(n.config) } catch (e) { return msg(e) }
   return null
@@ -136,6 +135,42 @@ export async function buscarRestantes(db: DatabaseSync, projetoId: string): Prom
     if (criarTask(db, { projetoId, missao: t.descricao.trim() || t.titulo, titulo: t.titulo, referencia: t.ref }).ok) n++
   }
   return n
+}
+
+// ---------- card como spec e movimento ao começar/aceitar (fonte MCP) ----------
+
+/** A fonte MCP e o id do card de uma task: pelo monitor (conector "fonte:<id>") ou pelo projeto que veio da fonte. `monitor` traz as colunas do próprio monitor. */
+function origemMcp(db: DatabaseSync, taskId: string) {
+  const v = db.prepare("SELECT v.ref, m.conector, m.coluna_inicio, m.coluna_conclusao FROM monitor_visto v JOIN monitor m ON m.id = v.monitor_id WHERE v.task_id = ?").get(taskId) as any
+  const t = db.prepare("SELECT t.referencia, p.fonte_id FROM task t JOIN projeto p ON p.id = t.projeto_id WHERE t.id = ?").get(taskId) as any
+  const id = v?.conector?.startsWith("fonte:") ? v.conector.slice(6) : t?.fonte_id
+  const ref = v?.ref ?? t?.referencia
+  const f = id && ref ? lerFonte(db, id) : undefined
+  return f?.tipo === "mcp" ? { f, ref: String(ref), monitor: v ? { inicio: String(v.coluna_inicio), conclusao: String(v.coluna_conclusao) } : undefined } : undefined
+}
+
+/** Texto do card (ferramenta de detalhe) para o contexto da task; vazio se não há fonte/ferramenta. Falha vira aviso no histórico da task, sem impedir. */
+export async function contextoDaFonte(db: DatabaseSync, taskId: string): Promise<string> {
+  const o = origemMcp(db, taskId)
+  if (!o) return ""
+  try {
+    const d = await usarFerramentaMcp(o.f.config, "detalhe", o.ref)
+    return d ? `## Card ${o.ref} (${o.f.rotulo})
+${d}` : ""
+  } catch (e) {
+    registrarEvento(db, taskId, "aviso", `Não consegui ler o card ${o.ref} na fonte: ${msg(e)}`)
+    return ""
+  }
+}
+
+/** Ao começar/aceitar, move o card para a coluna da fonte (se preenchida; o monitor, se tiver coluna própria, já moveu). */
+export async function moverNaFonte(db: DatabaseSync, taskId: string, quando: "aoComecar" | "aoAceitar") {
+  const o = origemMcp(db, taskId)
+  const coluna = String(o?.f.config[quando] ?? "").trim()
+  if (!o || !coluna || (quando === "aoComecar" ? o.monitor?.inicio : o.monitor?.conclusao)) return
+  try { await usarFerramentaMcp(o.f.config, "mover", o.ref, coluna) } catch (e) {
+    registrarEvento(db, taskId, "aviso", `Não consegui mover o card ${o.ref} para "${coluna}": ${msg(e)}`)
+  }
 }
 
 async function tentar<T>(fn: () => T | Promise<T>): Promise<Resultado<T>> {

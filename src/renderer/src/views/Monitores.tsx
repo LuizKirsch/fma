@@ -37,9 +37,9 @@ function EditorMonitor({ projeto, monitor, conectores, fontes, naMesa, aoFechar,
   const [conectar, setConectar] = useState<TipoFonte | null>(null)
   const [projetos, setProjetos] = useState<ProjetoDaFonte[] | null>(null)
   const [erroProj, setErroProj] = useState<string | null>(null)
-  // Fonte MCP escolhida como conector ("fonte:<id>"). Com ferramenta de projetos, a consulta é "projeto:coluna"; sem, só a coluna.
+  // Fonte MCP escolhida como conector ("fonte:<id>"). Fonte MCP: a consulta é só a coluna (o filtro da fonte já recorta); com projetos, é "projeto:coluna"; sem, só a coluna.
   const fonte = fontes.find((x) => `fonte:${x.id}` === f.conector)
-  const comProjetos = !!fonte && (fonte.tipo !== "mcp" || !!String(fonte.config.ferramentaProjetos ?? "").trim())
+  const comProjetos = !!fonte && fonte.tipo !== "mcp"
   useEffect(() => {
     setProjetos(null); setErroProj(null)
     if (!fonte || !comProjetos) return

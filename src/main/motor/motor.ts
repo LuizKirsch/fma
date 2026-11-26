@@ -38,6 +38,8 @@ export interface Ganchos {
   avisarLimiteTokens(task: Task): unknown
   /** RN 81: o Maestro chama o usuário (limite de devoluções, task que não conseguiu iniciar). */
   chamar(p: { projetoId: string; taskId: string; texto: string; acoes?: { id: "liberar" | "seguir" | "parar"; rotulo: string }[] }): unknown
+  /** Texto extra para o contexto da task (ex.: o card da fonte), lido antes das cartas rodarem. Falha ou demora (>15 s) são ignoradas. */
+  contextoExtra?(taskId: string): Promise<string>
   /** A task parou (pelo usuário, erro do motor ou commit que falhou). */
   aoParar?(taskId: string, motivo: string): unknown
   /** RN 86: o assunto da task foi resolvido fora do chat. */
@@ -563,7 +565,16 @@ async function comecarReservado(db: DatabaseSync, task: Task, projeto: ProjetoLi
   for (const [id, e] of Object.entries(ctx.estado)) marcar(ctx, id, e, e === "concluida" ? "Fora do caminho desta task" : e === "pronta" ? "Esperando o plano" : "Esperando entregas")
   registrar(ctx, "missao", ctx.task.missao)
   seguro(() => ganchos.aoComecar?.(taskId))
-  void rodarTask(ctx, iniciais)
+  void (async () => {
+    const extra = await Promise.race([Promise.resolve(ganchos.contextoExtra?.(taskId)), new Promise<string>((r) => setTimeout(() => r(""), 15_000))]).catch(() => "")
+    if (extra?.trim() && !ctx.parada) {
+      ctx.task.contexto = [ctx.task.contexto.trim(), extra.trim()].filter(Boolean).join(`
+
+`)
+      db.prepare("UPDATE task SET contexto = ? WHERE id = ?").run(ctx.task.contexto, taskId)
+    }
+    await rodarTask(ctx, iniciais)
+  })()
   return { ok: true, valor: ctx.task }
 }
 

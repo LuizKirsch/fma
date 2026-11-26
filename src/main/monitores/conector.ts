@@ -10,7 +10,7 @@ import type { DatabaseSync } from "node:sqlite"
 import type { Card } from "@shared/monitor"
 import type { Fonte } from "@shared/fonte"
 import { executar, type Executar } from "../apoio/proc"
-import { chamarFerramentaMcp, FECHADA, tasksMcp } from "../fontes-mcp"
+import { FECHADA, tasksMcp, usarFerramentaMcp } from "../fontes-mcp"
 import { mesmaColuna, parseConsulta } from "./puro"
 
 export interface CardLido { coluna: string; comentarios: string[] }
@@ -99,39 +99,24 @@ export class AvisoBoard extends Error {}
 /**
  * Conector de uma fonte MCP própria cadastrada, id "fonte:<id>".
  * Consulta: com ferramenta de projetos, "<projeto>:<coluna>"; sem, só a coluna (ou status).
- * mover/comentar chamam ferramentaMover/ferramentaComentar da config (argId/argStatus/argTexto, padrões id/status/texto);
+ * mover/comentar usam as ferramentas descobertas do servidor (nomes dos argumentos do inputSchema);
  * sem elas, avisam (AvisoBoard). lerCard devolve vazio: a retomada por coluna não dispara em fonte MCP.
  */
 export function conectorDeFonte(f: Fonte): Conector {
   const cfg = f.config
-  const txt = (k: string, padrao = "") => String(cfg[k] ?? "").trim() || padrao
-  const comProjetos = !!txt("ferramentaProjetos")
-  const partes = (c: string): [string, string] => {
-    if (!comProjetos) return ["*", c.trim()]
-    const i = c.indexOf(":")
-    return i < 0 ? ["", ""] : [c.slice(0, i).trim(), c.slice(i + 1).trim()]
-  }
-  const semEscrita = () => { throw new AvisoBoard(`A fonte "${f.rotulo}" não tem ferramenta para isso configurada: o card não foi alterado.`) }
+  const semEscrita = () => { throw new AvisoBoard(`O servidor da fonte "${f.rotulo}" não tem ferramenta para isso: o card não foi alterado.`) }
   return {
     id: `fonte:${f.id}`,
     nome: f.rotulo,
-    validarConsulta: (c) => { const [p, col] = partes(c); return p && col ? null : comProjetos ? 'Use "projeto:coluna" (escolha o projeto e informe a coluna).' : "Informe a coluna ou status." },
+    validarConsulta: (c) => (c.trim() ? null : "Informe a coluna ou status."),
     async buscar(consulta) {
-      const [p, coluna] = partes(consulta)
-      const tasks = await tasksMcp(f.tipo, { ...cfg, colunaPronta: coluna }, p, FECHADA.test(coluna.trim()))
+      const coluna = consulta.trim()
+      const tasks = await tasksMcp(f.tipo, { ...cfg, colunaPronta: coluna }, "*", FECHADA.test(coluna))
       return tasks.filter((t) => t.pronta).map((t) => ({ ref: t.ref, chave: t.ref, titulo: t.titulo, corpo: t.descricao, url: t.url ?? "" }))
     },
     lerCard: async () => ({ coluna: "", comentarios: [] }),
-    async mover(ref, coluna) {
-      const t = txt("ferramentaMover")
-      if (!t) return semEscrita()
-      await chamarFerramentaMcp(cfg, t, { [txt("argId", "id")]: ref, [txt("argStatus", "status")]: coluna })
-    },
-    async comentar(ref, texto) {
-      const t = txt("ferramentaComentar")
-      if (!t) return semEscrita()
-      await chamarFerramentaMcp(cfg, t, { [txt("argId", "id")]: ref, [txt("argTexto", "texto")]: texto })
-    },
+    async mover(ref, coluna) { if ((await usarFerramentaMcp(cfg, "mover", ref, coluna)) === false) semEscrita() },
+    async comentar(ref, texto) { if ((await usarFerramentaMcp(cfg, "comentar", ref, texto)) === false) semEscrita() },
   }
 }
 

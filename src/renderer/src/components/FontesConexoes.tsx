@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { CheckCircle2, Plug, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import { FONTES, COLUNA_PRONTA, type Fonte, type McpDaClaude, type TipoFonte } from "@shared/fonte"
+import { FONTES, COLUNA_PRONTA, camposDeFiltro, type FerramentaDoServidor, type Fonte, type MapaMcp, type McpDaClaude, type PapelMcp, type TipoFonte } from "@shared/fonte"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils"
 /** Tipos que dá para conectar (os "em breve" ficam de fora até existirem). */
 export const TIPOS_FONTE = (Object.keys(FONTES) as TipoFonte[]).filter((t) => !FONTES[t].emBreve)
 const texto = (v: unknown) => (typeof v === "string" ? v : "")
+const PAPEIS: [PapelMcp, string][] = [["lista", "Lê com"], ["detalhe", "Detalhe com"], ["mover", "Move com"], ["comentar", "Comenta com"]]
+const SELECT = "h-9 rounded-md border bg-transparent px-2 font-mono text-sm"
 
 export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: TipoFonte | null; fonte?: Fonte; aoFechar: () => void; aoSalvar: () => void }) {
   const [rotulo, setRotulo] = useState("")
@@ -24,11 +26,11 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
   const [servidor, setServidor] = useState("")
   const [env, setEnv] = useState("")
   const [pronta, setPronta] = useState("")
-  const [fTasks, setFTasks] = useState("")
-  const [fProj, setFProj] = useState("")
-  const [arg, setArg] = useState("")
-  const [mcpEscrita, setMcpEscrita] = useState({ ferramentaMover: "", argId: "", argStatus: "", ferramentaComentar: "", argTexto: "" })
-  const [ferramentas, setFerramentas] = useState<string[] | null>(null)
+  const [descoberta, setDescoberta] = useState<{ tools: FerramentaDoServidor[]; mapa: MapaMcp } | null>(null)
+  const [escolha, setEscolha] = useState<MapaMcp>({})
+  const [filtro, setFiltro] = useState<Record<string, string>>({})
+  const [aoComecar, setAoComecar] = useState("")
+  const [aoAceitar, setAoAceitar] = useState("")
   const [daClaude, setDaClaude] = useState<McpDaClaude[] | null>(null)
   const proprio = tipo === "mcp"
   const [ocupado, setOcupado] = useState(false)
@@ -38,7 +40,11 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
     if (!tipo) return
     const c = fonte?.config ?? {}
     setRotulo(fonte?.rotulo ?? FONTES[tipo].nome); setDono(texto(c.dono)); setServidor(texto(c.servidor)); setEnv(texto(c.env)); setPronta(texto(c.colunaPronta))
-    setFTasks(texto(c.ferramentaTasks)); setFProj(texto(c.ferramentaProjetos)); setArg(texto(c.argProjeto)); setMcpEscrita({ ferramentaMover: texto(c.ferramentaMover), argId: texto(c.argId), argStatus: texto(c.argStatus), ferramentaComentar: texto(c.ferramentaComentar), argTexto: texto(c.argTexto) }); setFerramentas(null); setDaClaude(null)
+    const f = (c.ferramentas ?? {}) as Record<string, unknown>
+    setEscolha({ lista: texto(f.lista) || texto(c.ferramentaTasks) || undefined, detalhe: texto(f.detalhe) || undefined, mover: texto(f.mover) || texto(c.ferramentaMover) || undefined, comentar: texto(f.comentar) || texto(c.ferramentaComentar) || undefined })
+    setFiltro(Object.fromEntries(Object.entries((c.filtro ?? {}) as Record<string, unknown>).map(([k, v]) => [k, texto(v)])))
+    setAoComecar(texto(c.aoComecar)); setAoAceitar(texto(c.aoAceitar)); setDescoberta(null); setDaClaude(null)
+    if (fonte && tipo === "mcp") void window.fma.fontes.ferramentas({ servidor: texto(c.servidor), env: texto(c.env) }).then((r) => r.ok && setDescoberta(r.valor))
   }, [tipo, fonte])
 
   async function descobrir() {
@@ -46,9 +52,12 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
     const r = await window.fma.fontes.ferramentas({ servidor: servidor.trim(), env })
     setOcupado(false)
     if (!r.ok) return void toast.error(r.erro)
-    setFerramentas(r.valor)
-    toast.success(`${r.valor.length} ferramentas encontradas`)
+    setDescoberta(r.valor)
+    setEscolha(Object.fromEntries(Object.entries(escolha).filter(([, v]) => v && r.valor.tools.some((t) => t.name === v)))) // mantém só as trocas que ainda existem
+    toast.success(`${r.valor.tools.length} ferramentas encontradas`)
   }
+  const final = (p: PapelMcp) => escolha[p] ?? descoberta?.mapa[p]
+  const ferramentaLista = descoberta?.tools.find((t) => t.name === final("lista"))
 
   async function importar() {
     setOcupado(true)
@@ -67,7 +76,8 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
 
   async function salvar() {
     setOcupado(true)
-    const config = github ? { dono: dono.trim(), colunaPronta: pronta.trim() } : { servidor: servidor.trim(), env, colunaPronta: pronta.trim(), ...(proprio ? { ferramentaTasks: fTasks.trim(), ferramentaProjetos: fProj.trim(), argProjeto: arg.trim(), ...Object.fromEntries(Object.entries(mcpEscrita).map(([k, v]) => [k, v.trim()])) } : {}) }
+    const mcp = { ferramentas: Object.fromEntries(PAPEIS.map(([p]) => [p, final(p) ?? ""])), filtro: Object.fromEntries(Object.entries(filtro).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v)), aoComecar: aoComecar.trim(), aoAceitar: aoAceitar.trim() }
+    const config = github ? { dono: dono.trim(), colunaPronta: pronta.trim() } : { servidor: servidor.trim(), env, colunaPronta: pronta.trim(), ...(proprio ? mcp : {}) }
     const r = fonte ? await window.fma.fontes.atualizar(fonte.id, { rotulo, config }) : await window.fma.fontes.criar({ tipo: tipo!, rotulo, config })
     setOcupado(false)
     if (!r.ok) return void toast.error(r.erro)
@@ -96,9 +106,9 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
           ) : (
             <>
               <Field>
-                <FieldLabel htmlFor="fonte-servidor">Comando ou URL do servidor MCP</FieldLabel>
+                <FieldLabel htmlFor="fonte-servidor">Servidor (URL ou comando)</FieldLabel>
                 <Input id="fonte-servidor" className="font-mono" value={servidor} onChange={(e) => setServidor(e.target.value)} placeholder="node meu-mcp.js  ou  https://servidor/mcp" />
-                <FieldDescription>O FMA descobre as ferramentas do servidor ao testar. Credenciais vão no campo abaixo (ficam em texto no banco local).</FieldDescription>
+                {!proprio && <FieldDescription>O FMA descobre as ferramentas do servidor ao testar. Credenciais vão no campo abaixo (ficam em texto no banco local).</FieldDescription>}
                 <Button type="button" variant="outline" size="sm" className="self-start" disabled={ocupado} onClick={() => void importar()}>{ocupado ? "Procurando na Claude…" : "Importar da Claude"}</Button>
                 {daClaude && daClaude.length > 0 && (
                   <div className="flex max-h-44 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
@@ -112,48 +122,53 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
                   </div>
                 )}
               </Field>
-              <Field>
+              {!/^https?:\/\//i.test(servidor.trim()) && <Field>
                 <FieldLabel htmlFor="fonte-env">Variáveis de ambiente</FieldLabel>
                 <Textarea id="fonte-env" className="font-mono" rows={3} value={env} onChange={(e) => setEnv(e.target.value)} placeholder="API_TOKEN=..." />
-                <FieldDescription>Uma por linha, NOME=valor. Só vale para comando; para URL, não é usado.</FieldDescription>
-              </Field>
+                <FieldDescription>Uma por linha, NOME=valor. Credenciais do servidor (ficam em texto no banco local).</FieldDescription>
+              </Field>}
               {proprio && (
                 <>
-                  <Button variant="outline" size="sm" className="self-start" disabled={ocupado || !servidor.trim()} onClick={() => void descobrir()}>Descobrir ferramentas</Button>
-                  <datalist id="fonte-ferramentas">{ferramentas?.map((t) => <option key={t} value={t} />)}</datalist>
-                  <Field>
-                    <FieldLabel htmlFor="fonte-ftasks">Ferramenta que lista as tasks</FieldLabel>
-                    <Input id="fonte-ftasks" className="font-mono" list="fonte-ferramentas" value={fTasks} onChange={(e) => setFTasks(e.target.value)} placeholder="ex.: listar_tasks" />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="fonte-fproj">Ferramenta que lista os projetos (opcional)</FieldLabel>
-                    <Input id="fonte-fproj" className="font-mono" list="fonte-ferramentas" value={fProj} onChange={(e) => setFProj(e.target.value)} placeholder="Vazio: a fonte é um projeto só" />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="fonte-fmover">Ferramenta que move o card de coluna (opcional)</FieldLabel>
-                    <Input id="fonte-fmover" className="font-mono" list="fonte-ferramentas" value={mcpEscrita.ferramentaMover} onChange={(e) => setMcpEscrita({ ...mcpEscrita, ferramentaMover: e.target.value })} placeholder="Vazio: o FMA só lê o board" />
-                    {mcpEscrita.ferramentaMover.trim() && (
-                      <div className="flex gap-2">
-                        <Input aria-label="Argumento do id" className="font-mono" value={mcpEscrita.argId} onChange={(e) => setMcpEscrita({ ...mcpEscrita, argId: e.target.value })} placeholder="id" />
-                        <Input aria-label="Argumento da coluna" className="font-mono" value={mcpEscrita.argStatus} onChange={(e) => setMcpEscrita({ ...mcpEscrita, argStatus: e.target.value })} placeholder="status" />
+                  <Button variant="outline" size="sm" className="self-start" disabled={ocupado || !servidor.trim()} onClick={() => void descobrir()}>{ocupado ? "Conectando…" : "Conectar"}</Button>
+                  {descoberta && (
+                    <>
+                      <p className="text-sm text-muted-foreground">{PAPEIS.map(([p, r]) => `${r} ${final(p) ?? "—"}`).join(" · ")}</p>
+                      <details className="rounded-lg border p-2 text-sm">
+                        <summary className="cursor-pointer">Trocar ferramentas</summary>
+                        <div className="mt-2 grid grid-cols-[auto_1fr] items-center gap-2">
+                          {PAPEIS.map(([p, r]) => (
+                            <label key={p} className="contents">
+                              <span>{r}</span>
+                              <select className={SELECT} value={final(p) ?? ""} onChange={(e) => setEscolha({ ...escolha, [p]: e.target.value || undefined })}>
+                                <option value="">—</option>
+                                {descoberta.tools.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
+                              </select>
+                            </label>
+                          ))}
+                        </div>
+                      </details>
+                      {camposDeFiltro(ferramentaLista).length > 0 && (
+                        <Field>
+                          <FieldLabel>Filtro</FieldLabel>
+                          <div className="grid grid-cols-2 gap-2">
+                            {camposDeFiltro(ferramentaLista).map((c) => (
+                              <Input key={c.nome} aria-label={c.nome} title={c.nome} className="font-mono" value={filtro[c.nome] ?? ""} onChange={(e) => setFiltro({ ...filtro, [c.nome]: e.target.value })} placeholder={c.descricao ? `${c.nome}: ${c.descricao}` : c.nome} />
+                            ))}
+                          </div>
+                          <FieldDescription>Só as tasks que casam com o que você preencher; vazios não vão.</FieldDescription>
+                        </Field>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <Field>
+                          <FieldLabel htmlFor="fonte-comecar">Ao começar, mover para</FieldLabel>
+                          <Input id="fonte-comecar" value={aoComecar} onChange={(e) => setAoComecar(e.target.value)} placeholder="ex.: Fazendo" disabled={!final("mover")} />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="fonte-aceitar">Ao aceitar, mover para</FieldLabel>
+                          <Input id="fonte-aceitar" value={aoAceitar} onChange={(e) => setAoAceitar(e.target.value)} placeholder="ex.: Para Teste" disabled={!final("mover")} />
+                        </Field>
                       </div>
-                    )}
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="fonte-fcom">Ferramenta que comenta no card (opcional)</FieldLabel>
-                    <Input id="fonte-fcom" className="font-mono" list="fonte-ferramentas" value={mcpEscrita.ferramentaComentar} onChange={(e) => setMcpEscrita({ ...mcpEscrita, ferramentaComentar: e.target.value })} placeholder="Vazio: o FMA não comenta" />
-                    {mcpEscrita.ferramentaComentar.trim() && (
-                      <div className="flex gap-2">
-                        <Input aria-label="Argumento do id" className="font-mono" value={mcpEscrita.argId} onChange={(e) => setMcpEscrita({ ...mcpEscrita, argId: e.target.value })} placeholder="id" />
-                        <Input aria-label="Argumento do texto" className="font-mono" value={mcpEscrita.argTexto} onChange={(e) => setMcpEscrita({ ...mcpEscrita, argTexto: e.target.value })} placeholder="texto" />
-                      </div>
-                    )}
-                  </Field>
-                  {fProj.trim() && (
-                    <Field>
-                      <FieldLabel htmlFor="fonte-arg">Argumento do projeto na ferramenta das tasks</FieldLabel>
-                      <Input id="fonte-arg" className="font-mono" value={arg} onChange={(e) => setArg(e.target.value)} placeholder="project" />
-                    </Field>
+                    </>
                   )}
                 </>
               )}
@@ -167,7 +182,7 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={aoFechar}>Cancelar</Button>
-          <Button disabled={ocupado || !rotulo.trim() || (!github && !servidor.trim()) || (proprio && !fTasks.trim())} onClick={() => void salvar()}>{fonte ? "Salvar" : "Conectar"}</Button>
+          <Button disabled={ocupado || !rotulo.trim() || (!github && !servidor.trim()) || (proprio && !final("lista"))} onClick={() => void salvar()}>{fonte ? "Salvar" : "Conectar"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
