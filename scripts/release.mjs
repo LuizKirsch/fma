@@ -13,5 +13,5 @@ if (execSync("git status --porcelain").toString().trim()) {
 }
 rodar(`npm version ${nivel} -m "release: v%s"`) // commit + tag da versão
 const GH_TOKEN = execSync("gh auth token").toString().trim()
+rodar("git push --follow-tags") // a tag tem que estar no GitHub antes: release publicado exige tag válida
 rodar("npm run build && npx electron-builder --win --publish always", { GH_TOKEN })
-rodar("git push --follow-tags")
