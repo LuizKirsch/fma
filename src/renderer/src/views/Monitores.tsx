@@ -64,7 +64,14 @@ function EditorMonitor({ projeto, monitor, conectores, fontes, naMesa, aoFechar,
 
   async function salvar() {
     const r = monitor === "novo" ? await window.fma.monitores.criar({ projetoId: projeto.id, ...f }) : await window.fma.monitores.atualizar(monitor!.id, f)
-    if (ok(r)) { aoSalvo(); aoFechar() }
+    const salvo = ok(r)
+    if (!salvo) return
+    aoSalvo(); aoFechar()
+    if (monitor === "novo") { // não espera o intervalo: busca já e diz o que achou
+      const b = await window.fma.monitores.buscarAgora(salvo.id)
+      if (b.ok) toast.info("Monitor buscou no board", { description: b.valor.ultimoResultado || "Sem resultado." })
+      aoSalvo()
+    }
   }
 
   return (
@@ -92,7 +99,7 @@ function EditorMonitor({ projeto, monitor, conectores, fontes, naMesa, aoFechar,
                     <Button type="button" size="xs" variant="ghost" onClick={() => setTiposAbertos(false)}>Cancelar</Button>
                   </span>}
             </div>
-            <FormularioFonte tipo={conectar} aoFechar={() => { setConectar(null); setTiposAbertos(false) }} aoSalvar={recarregarFontes} />
+            <FormularioFonte tipo={conectar} aoFechar={() => { setConectar(null); setTiposAbertos(false) }} aoSalvar={(nova) => { recarregarFontes(); if (nova) setF((x) => ({ ...x, conector: `fonte:${nova.id}`, nome: x.nome || nova.rotulo })) }} />
           </Field>
           {comProjetos && (
             <Field>
@@ -105,10 +112,10 @@ function EditorMonitor({ projeto, monitor, conectores, fontes, naMesa, aoFechar,
             </Field>
           )}
           <Field>
-            <FieldLabel htmlFor="mo-q">{fonte ? "Coluna ou status" : "Consulta"}</FieldLabel>
-            <Input id="mo-q" value={fonte && comProjetos ? f.consulta.slice(f.consulta.indexOf(":") + 1 || f.consulta.length) : f.consulta} className={fonte ? "" : "font-mono"} placeholder={fonte ? "Pronta para desenvolver" : "acme/3:Pronto para desenvolver"}
+            <FieldLabel htmlFor="mo-q">{fonte ? "Coluna ou status (opcional)" : "Consulta"}</FieldLabel>
+            <Input id="mo-q" value={fonte && comProjetos ? f.consulta.slice(f.consulta.indexOf(":") + 1 || f.consulta.length) : f.consulta} className={fonte ? "" : "font-mono"} placeholder={fonte ? "Vazio: todas as abertas do filtro da fonte" : "acme/3:Pronto para desenvolver"}
               onChange={(e) => set("consulta", comProjetos ? `${f.consulta.split(":")[0]}:${e.target.value}` : e.target.value)} />
-            <FieldDescription>{fonte ? `Traz as tasks abertas que estão nessa coluna em ${fonte.rotulo}. Esta fonte só lê o board: o card não é movido nem comentado.` : "GitHub Projects: dono/número do projeto:coluna. Usa o gh instalado e logado (com o escopo project)."}</FieldDescription>
+            <FieldDescription>{fonte ? `Traz as tasks abertas de ${fonte.rotulo} (com o filtro da fonte) que estão nessa coluna. Vazio: todas as abertas.` : "GitHub Projects: dono/número do projeto:coluna. Usa o gh instalado e logado (com o escopo project)."}</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="mo-int">Intervalo (minutos)</FieldLabel>
@@ -125,7 +132,9 @@ function EditorMonitor({ projeto, monitor, conectores, fontes, naMesa, aoFechar,
               {naMesa.filter((c) => c.classe !== "orquestrador").map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <details className="rounded-md border px-3 py-2 text-sm" open={!fonte}>
+          <summary className="cursor-pointer select-none text-muted-foreground">{fonte ? "Mais opções (as colunas de começar e aceitar já vêm da fonte)" : "Colunas do board"}</summary>
+          <div className="mt-3 grid grid-cols-2 gap-3">
             {texto("colunaInicio", "mo-ci", "Coluna ao começar", "Para onde o card vai quando a task começa.")}
             {texto("colunaConclusao", "mo-cc", "Coluna ao concluir", "Para onde vai quando a task termina.")}
             {texto("colunaTrava", "mo-ct", "Coluna ao travar", "Quando a task espera uma decisão.")}
@@ -135,6 +144,7 @@ function EditorMonitor({ projeto, monitor, conectores, fontes, naMesa, aoFechar,
             <Switch id="mo-com" checked={f.comentarAoTravar} onCheckedChange={(v) => set("comentarAoTravar", v)} />
             <FieldLabel htmlFor="mo-com">Comentar a dúvida no card quando a task trava</FieldLabel>
           </Field>
+          </details>
         </FieldGroup>
         <DialogFooter>
           <Button variant="ghost" onClick={aoFechar}>Cancelar</Button>

@@ -20,7 +20,7 @@ const texto = (v: unknown) => (typeof v === "string" ? v : "")
 const PAPEIS: [PapelMcp, string][] = [["lista", "Lê com"], ["detalhe", "Detalhe com"], ["mover", "Move com"], ["comentar", "Comenta com"]]
 const SELECT = "h-9 rounded-md border bg-transparent px-2 font-mono text-sm"
 
-export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: TipoFonte | null; fonte?: Fonte; aoFechar: () => void; aoSalvar: () => void }) {
+export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: TipoFonte | null; fonte?: Fonte; aoFechar: () => void; aoSalvar: (fonte?: Fonte) => void }) {
   const [rotulo, setRotulo] = useState("")
   const [dono, setDono] = useState("")
   const [servidor, setServidor] = useState("")
@@ -82,7 +82,7 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
     setOcupado(false)
     if (!r.ok) return void toast.error(r.erro)
     toast.success(fonte ? "Fonte atualizada" : "Fonte conectada", { description: "Use Testar para conferir a conexão." })
-    aoSalvar(); aoFechar()
+    aoSalvar(r.valor); aoFechar()
   }
 
   return (
@@ -182,7 +182,7 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={aoFechar}>Cancelar</Button>
-          <Button disabled={ocupado || !rotulo.trim() || (!github && !servidor.trim()) || (proprio && !final("lista"))} onClick={() => void salvar()}>{fonte ? "Salvar" : "Conectar"}</Button>
+          <Button disabled={ocupado || !rotulo.trim() || (!github && !servidor.trim()) || (proprio && !final("lista"))} onClick={() => void salvar()}>{fonte ? "Salvar" : "Salvar fonte"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
