@@ -48,9 +48,11 @@ export function validarMonitor(db: DatabaseSync, m: Monitor): string | null {
 
 export type NovoMonitor = Partial<Omit<Monitor, "id" | "ultimaChecagem" | "proximaChecagem" | "ultimoResultado" | "totalCriadas">> & Pick<Monitor, "projetoId" | "nome" | "conector" | "consulta">
 
+// Upsert de verdade: INSERT OR REPLACE apagava a linha e o ON DELETE CASCADE levava os vistos (task perdia o card de origem).
 function gravar(db: DatabaseSync, m: Monitor) {
-  db.prepare(`INSERT OR REPLACE INTO monitor (id, projeto_id, nome, conector, consulta, intervalo_min, ativo, inicio_automatico, carta_inicial_id, coluna_inicio,
-    coluna_conclusao, coluna_trava, comentar_ao_travar, coluna_retomada, ultima_checagem, proxima_checagem, ultimo_resultado, total_criadas) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+  db.prepare(`INSERT INTO monitor (id, projeto_id, nome, conector, consulta, intervalo_min, ativo, inicio_automatico, carta_inicial_id, coluna_inicio,
+    coluna_conclusao, coluna_trava, comentar_ao_travar, coluna_retomada, ultima_checagem, proxima_checagem, ultimo_resultado, total_criadas) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET projeto_id=excluded.projeto_id, nome=excluded.nome, conector=excluded.conector, consulta=excluded.consulta, intervalo_min=excluded.intervalo_min, ativo=excluded.ativo, inicio_automatico=excluded.inicio_automatico, carta_inicial_id=excluded.carta_inicial_id, coluna_inicio=excluded.coluna_inicio, coluna_conclusao=excluded.coluna_conclusao, coluna_trava=excluded.coluna_trava, comentar_ao_travar=excluded.comentar_ao_travar, coluna_retomada=excluded.coluna_retomada, ultima_checagem=excluded.ultima_checagem, proxima_checagem=excluded.proxima_checagem, ultimo_resultado=excluded.ultimo_resultado, total_criadas=excluded.total_criadas`)
     .run(m.id, m.projetoId, m.nome.trim(), m.conector, m.consulta.trim(), m.intervaloMin, +m.ativo, +m.inicioAutomatico, m.cartaInicialId, m.colunaInicio, m.colunaConclusao,
       m.colunaTrava, +m.comentarAoTravar, m.colunaRetomada, m.ultimaChecagem, m.proximaChecagem, m.ultimoResultado, m.totalCriadas)
 }
