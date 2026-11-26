@@ -113,7 +113,7 @@ function EditorMonitor({ projeto, monitor, conectores, fontes, naMesa, aoFechar,
           )}
           <Field>
             <FieldLabel htmlFor="mo-q">{fonte ? "Coluna ou status (opcional)" : "Consulta"}</FieldLabel>
-            <Input id="mo-q" value={fonte && comProjetos ? f.consulta.slice(f.consulta.indexOf(":") + 1 || f.consulta.length) : f.consulta} className={fonte ? "" : "font-mono"} placeholder={fonte ? "Vazio: todas as abertas do filtro da fonte" : "acme/3:Pronto para desenvolver"}
+            <Input id="mo-q" value={fonte && comProjetos ? f.consulta.slice(f.consulta.indexOf(":") + 1 || f.consulta.length) : f.consulta} className={fonte ? "" : "font-mono"} placeholder={fonte ? "Vazio: todas as abertas. Várias: A Fazer, Rejeitado" : "acme/3:Pronto para desenvolver"}
               onChange={(e) => set("consulta", comProjetos ? `${f.consulta.split(":")[0]}:${e.target.value}` : e.target.value)} />
             <FieldDescription>{fonte ? `Traz as tasks abertas de ${fonte.rotulo} (com o filtro da fonte) que estão nessa coluna. Vazio: todas as abertas.` : "GitHub Projects: dono/número do projeto:coluna. Usa o gh instalado e logado (com o escopo project)."}</FieldDescription>
           </Field>

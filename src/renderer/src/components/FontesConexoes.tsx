@@ -150,6 +150,7 @@ export function FormularioFonte({ tipo, fonte, aoFechar, aoSalvar }: { tipo: Tip
                       {camposDeFiltro(ferramentaLista).length > 0 && (
                         <Field>
                           <FieldLabel>Filtro</FieldLabel>
+                          <FieldDescription>Os campos que o servidor aceita, não colunas do board. Vários valores numa busca só: separe por vírgula (ex. projeto: SC, PA2).</FieldDescription>
                           <div className="grid grid-cols-2 gap-2">
                             {camposDeFiltro(ferramentaLista).map((c) => (
                               <Input key={c.nome} aria-label={c.nome} title={c.nome} className="font-mono" value={filtro[c.nome] ?? ""} onChange={(e) => setFiltro({ ...filtro, [c.nome]: e.target.value })} placeholder={c.descricao ? `${c.nome}: ${c.descricao}` : c.nome} />
