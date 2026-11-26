@@ -56,7 +56,7 @@ export function extrairLista(saida: string): Obj[] {
   return acha(j, 0) ?? []
 }
 
-export const FECHADA = /^(done|closed|resolved|removed|cancel+ed|finalizad[ao]s?|rejeitad[ao]s?|conclu[ií]d[ao]s?|fechad[ao]s?|resolvid[ao]s?|cancelad[ao]s?)$/i
+export const FECHADA = /^(done|closed|resolved|removed|cancel+ed|finalizad[ao]s?|rejeitad[ao]s?|conclu[ií]d[ao]s?|fechad[ao]s?|resolvid[ao]s?|cancelad[ao]s?|aprovad[ao]s?)$/i
 
 interface Contexto { c: Client; tools: Tool[]; extra: Obj }
 interface Lida { o: Obj; ref: string; status: string; fechada: boolean }
@@ -94,7 +94,19 @@ function generico(config: Obj): Perfil {
     async tasks(x) {
       const lista = mapaDe(x, config).lista
       if (!lista) throw new Error(`O servidor não tem uma ferramenta que liste tasks (buscar_*, listar_*...). Ele expõe: ${x.tools.map((k) => k.name).join(", ") || "nenhuma"}.`)
-      const l = extrairLista(await chamar(x, [lista], filtroDe(config)))
+      // Paginação: se a ferramenta aceita pagina/page, lê as páginas seguintes. ponytail: até 10 páginas; aumente se o board for maior.
+      const props = x.tools.find((t) => t.name === lista)?.inputSchema?.properties ?? {}
+      const pag = Object.keys(props).find((k) => /^(pagina|page)$/i.test(k))
+      const l: Obj[] = []
+      for (let p = 1; p <= 10; p++) {
+        const saida = await chamar(x, [lista], { ...filtroDe(config), ...(pag ? { [pag]: p } : {}) })
+        const pagina = extrairLista(saida)
+        l.push(...pagina)
+        if (!pag || !pagina.length) break
+        let j: Obj = {}
+        try { j = JSON.parse(saida) } catch { /* sem metadados: tenta a próxima */ }
+        if (j.tem_proxima_pagina === false || j.has_more === false || (typeof j.total_paginas === "number" && p >= j.total_paginas)) break
+      }
       return l.map((o) => {
         const status = String(primeiro(o, "fields.status.name", "status.name", "status", "state", "situacao") ?? "")
         return { o, ref: String(primeiro(o, "key", "ref", "id", "number", "codigo") ?? ""), status, fechada: FECHADA.test(status) }
@@ -147,8 +159,8 @@ function paraTask(p: Lida, pronta: string): TaskDaFonte {
   const url = primeiro(p.o, "url", "_links.html.href")
   return {
     ref: p.ref,
-    titulo: mascarar(String(primeiro(p.o, "fields.summary", "fields.System.Title", "System.Title", "title", "summary", "name") ?? p.ref)),
-    descricao: mascarar(texto(primeiro(p.o, "fields.description", "fields.System.Description", "System.Description", "description"))),
+    titulo: mascarar(String(primeiro(p.o, "fields.summary", "fields.System.Title", "System.Title", "title", "titulo", "summary", "name", "nome") ?? p.ref)),
+    descricao: mascarar(texto(primeiro(p.o, "fields.description", "fields.System.Description", "System.Description", "description", "descricao", "descricao_texto"))),
     url: typeof url === "string" ? url : undefined,
     pronta: p.status.trim().toLowerCase() === pronta.trim().toLowerCase(),
   }
