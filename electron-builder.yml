@@ -20,3 +20,10 @@ linux:
     - AppImage
     - deb
   category: Development
+
+# Auto-update: o app instalado confere os releases deste repositório (público). Publicar: npm run release.
+publish:
+  provider: github
+  owner: LuizKirsch
+  repo: fma
+  releaseType: release

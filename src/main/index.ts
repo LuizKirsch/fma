@@ -27,6 +27,7 @@ import { registrarIpcMonitores } from "./monitores/ipc"
 import { iniciarAgendador } from "./monitores/servico"
 import { registrarIpcMaestro } from "./maestro/ipc"
 import { listarTasks } from "./motor/dados"
+import { iniciarAtualizacao } from "./atualizacao"
 import { apagarTudo, avisarConclusao, concluirBoasVindas, concluirTutorial, tutorialVisto, mostrarBoasVindas, resumoDosProjetos } from "./geral"
 
 let janelaAtual: BrowserWindow | null = null
@@ -156,6 +157,7 @@ app.whenReady().then(async () => {
   ligarIntegracoes(db, maestro)
   iniciarAgendador(db)
   await retomarAoAbrir(db)
+  iniciarAtualizacao()
   // macOS: clicar no ícone do dock sem janela aberta cria uma nova.
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) criarJanela()
