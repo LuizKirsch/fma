@@ -111,7 +111,7 @@ export function conectorDeFonte(f: Fonte): Conector {
     validarConsulta: () => null, // vazio: todas as tasks abertas que o filtro da fonte traz
     async buscar(consulta) {
       const coluna = consulta.trim()
-      const tasks = await tasksMcp(f.tipo, { ...cfg, colunaPronta: coluna }, "*", FECHADA.test(coluna))
+      const tasks = await tasksMcp(f.tipo, { ...cfg, colunaPronta: coluna }, "*", coluna.split(",").some((c) => FECHADA.test(c.trim())))
       return (coluna ? tasks.filter((t) => t.pronta) : tasks).map((t) => ({ ref: t.ref, chave: t.ref, titulo: t.titulo, corpo: t.descricao, url: t.url ?? "" }))
     },
     lerCard: async () => ({ coluna: "", comentarios: [] }),
