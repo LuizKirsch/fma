@@ -223,14 +223,15 @@ export function abrirBanco(caminho = join(app.getPath("userData"), "fma.db")): D
 }
 
 /** Roda `fn` numa transação: ou grava tudo, ou nada. */
+/** SAVEPOINT em vez de BEGIN: pode aninhar (ex.: excluirProjeto → removerCartaApoio) sem "transaction within a transaction". */
 export function transacao<T>(banco: DatabaseSync, fn: () => T): T {
-  banco.exec("BEGIN")
+  banco.exec("SAVEPOINT tx")
   try {
     const r = fn()
-    banco.exec("COMMIT")
+    banco.exec("RELEASE tx")
     return r
   } catch (e) {
-    banco.exec("ROLLBACK")
+    banco.exec("ROLLBACK TO tx; RELEASE tx")
     throw e
   }
 }

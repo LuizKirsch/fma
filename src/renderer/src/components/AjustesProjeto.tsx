@@ -55,7 +55,7 @@ export function AjustesProjeto({ projeto, aoFechar }: { projeto: Projeto | null;
     aoFechar()
   }
   async function confirmarExclusao() {
-    const r = await excluirProjeto(projeto!.id)
+    const r = await excluirProjeto(projeto!.id).catch((e) => ({ ok: false as const, erro: String((e as Error)?.message ?? e) }))
     if (r.ok) toast(`Projeto "${projeto!.nome}" excluído`)
     else toast.error(r.erro)
     setExcluindo(null)
