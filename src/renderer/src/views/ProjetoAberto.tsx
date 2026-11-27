@@ -25,8 +25,11 @@ import type { Forjar } from "@/components/Forja"
 import { useCartas } from "@/data/cartas"
 import { Button } from "@/components/ui/button"
 
-type Visao = "mesa" | "tasks" | "monitores" | "terminal"
-const VISOES = [{ id: "mesa", rotulo: "Mesa", I: LayoutGrid }, { id: "tasks", rotulo: "Tasks", I: ListChecks }, { id: "monitores", rotulo: "Monitores", I: Radar }, { id: "terminal", rotulo: "Terminal", I: SquareTerminal }] as const
+type Visao = "mesa" | "tasks" | "monitores"
+const VISOES = [{ id: "mesa", rotulo: "Mesa", I: LayoutGrid }, { id: "tasks", rotulo: "Tasks", I: ListChecks }, { id: "monitores", rotulo: "Monitores", I: Radar }] as const
+/** O que a aba Tasks mostra da task escolhida: a lista, o console dela ou a mesa animada só por ela. */
+type Foco = "lista" | "terminal" | "mesa"
+const FOCOS = [{ id: "lista", rotulo: "Lista", I: ListChecks }, { id: "terminal", rotulo: "Terminal", I: SquareTerminal }, { id: "mesa", rotulo: "Mesa", I: LayoutGrid }] as const
 
 function ChipFaixa({ task, ativo, aoEscolher }: { task: Task; ativo: boolean; aoEscolher: () => void }) {
   const detalhe = useDetalhe(task.id)
@@ -44,6 +47,7 @@ export function ProjetoAberto({ projeto, forjar }: { projeto: Projeto; forjar: F
   const todas = useTasks()
   const [visao, setVisao] = useState<Visao>("mesa")
   const [escolhida, setEscolhida] = useState<string | null>(null)
+  const [foco, setFoco] = useState<Foco>("lista")
   const [nova, setNova] = useState(false)
   const [chat, setChat] = useState(false)
   const mon = useMonitores(projeto.id)
@@ -55,14 +59,14 @@ export function ProjetoAberto({ projeto, forjar }: { projeto: Projeto; forjar: F
   const acompanhada = doProjeto.find((t) => t.id === escolhida) ?? emAndamento[0] ?? null
   const detalhe = useDetalhe(acompanhada?.id ?? null)
 
-  // RF 3.28: o que cada carta da mesa está fazendo na task acompanhada.
+  // RF 3.28: o que cada carta da mesa está fazendo na task acompanhada (só na mesa da task; a do projeto é para montar o time).
   const atividades = new Map((detalhe?.cartas ?? []).filter((c) => c.copia && !c.retirada).map((c) => [c.cartaId, { estado: c.estado, atividade: c.atividade }]))
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
       <div className={cn("flex items-center gap-3 overflow-x-auto border-b bg-background/60 px-4 py-2", emAndamento.length === 0 && "hidden")}>
         <span className="shrink-0 text-xs text-muted-foreground tabular">Vagas {vagasEmUso(todas, projeto.id)}/{projeto.vagas}</span>
-        {emAndamento.map((t) => <ChipFaixa key={t.id} task={t} ativo={t.id === acompanhada?.id} aoEscolher={() => setEscolhida(t.id)} />)}
+        {emAndamento.map((t) => <ChipFaixa key={t.id} task={t} ativo={t.id === acompanhada?.id} aoEscolher={() => { setEscolhida(t.id); setVisao("tasks") }} />)}
       </div>
       <div className={cn("flex flex-col gap-2 px-4 pt-2", esperando.length === 0 && "hidden")}>
         {esperando.map((t) => <AvisoDecisao key={t.id} task={t} />)}
@@ -82,11 +86,25 @@ export function ProjetoAberto({ projeto, forjar }: { projeto: Projeto; forjar: F
         <Button size="sm" variant="outline" onClick={() => setNova(true)}><Plus data-icon="inline-start" />Task manual</Button>
       </div>
       <div className="flex min-h-0 flex-1">
-        <div className="min-h-0 min-w-0 flex-1">
-          {visao === "mesa" && <Mesa projeto={projeto} forjar={forjar} avisoMaestro={() => setChat(true)} atividades={atividades} />}
-          {visao === "tasks" && <Tasks projeto={projeto} acompanhada={acompanhada?.id ?? null} aoEscolher={setEscolhida} aoNova={() => setNova(true)} />}
-          {visao === "monitores" && <Monitores projeto={projeto} monitores={mon.monitores} recarregar={mon.recarregar} />}
-          {visao === "terminal" && <Terminal detalhe={detalhe} />}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {visao === "tasks" && detalhe && (
+            <div role="tablist" className="flex shrink-0 items-center gap-1 border-b px-4 py-1.5">
+              {FOCOS.map(({ id, rotulo, I }) => (
+                <button key={id} role="tab" aria-selected={foco === id} onClick={() => setFoco(id)}
+                  className={cn("flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs", foco === id ? "bg-secondary font-medium" : "text-muted-foreground hover:text-foreground")}>
+                  <I className="size-3.5" />{rotulo}
+                </button>
+              ))}
+              {foco !== "lista" && <span className="ml-2 text-xs text-muted-foreground">da task <span className="font-mono text-foreground">{rotuloDaTask(detalhe.task)}</span></span>}
+            </div>
+          )}
+          <div className="min-h-0 flex-1">
+            {visao === "mesa" && <Mesa projeto={projeto} forjar={forjar} avisoMaestro={() => setChat(true)} />}
+            {visao === "tasks" && (!detalhe || foco === "lista") && <Tasks projeto={projeto} acompanhada={acompanhada?.id ?? null} aoEscolher={setEscolhida} aoNova={() => setNova(true)} />}
+            {visao === "tasks" && detalhe && foco === "terminal" && <Terminal detalhe={detalhe} />}
+            {visao === "tasks" && detalhe && foco === "mesa" && <Mesa projeto={projeto} forjar={forjar} avisoMaestro={() => setChat(true)} atividades={atividades} />}
+            {visao === "monitores" && <Monitores projeto={projeto} monitores={mon.monitores} recarregar={mon.recarregar} />}
+          </div>
         </div>
         {visao === "tasks" && detalhe && (
           <aside className="w-[380px] shrink-0 border-l bg-card/40"><PainelTask detalhe={detalhe} cartas={cartas} /></aside>
