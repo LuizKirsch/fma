@@ -14,10 +14,14 @@ interface Estado {
   detalhes: Record<string, DetalheTask>
   consoles: Record<string, LinhaConsole[]>
   carregado: boolean
+  /** Situação de cada task na última vez que você a abriu (atenção "não lida", estilo Orca). Fica no localStorage. */
+  vistas: Record<string, string>
 }
 
 const MAX_CONSOLE = 2000
-let estado: Estado = { tasks: [], detalhes: {}, consoles: {}, carregado: false }
+const CHAVE_VISTAS = "fma:tasks-vistas"
+const vistasSalvas = (): Record<string, string> | null => { try { return JSON.parse(localStorage.getItem(CHAVE_VISTAS) ?? "null") } catch { return null } }
+let estado: Estado = { tasks: [], detalhes: {}, consoles: {}, carregado: false, vistas: vistasSalvas() ?? {} }
 const ouvintes = new Set<() => void>()
 const muda = (e: Partial<Estado>) => { estado = { ...estado, ...e }; ouvintes.forEach((f) => f()) }
 const pedidos = new Set<string>()
@@ -66,6 +70,25 @@ function aoEvento(e: Parameters<Parameters<typeof window.fma.tasks.aoEvento>[0]>
   }
 }
 
+/**
+ * Atenção da task, como no Orca: "esperando" você (decisão ou revisão), "trabalhando", ou "nova" (concluída ou
+ * parada depois da última vez que você a abriu). Esperando só apaga ao resolver; "nova" apaga ao abrir.
+ */
+export type Atencao = "esperando" | "trabalhando" | "nova" | null
+export function atencaoDa(t: Task, vistas: Record<string, string>): Atencao {
+  if (t.situacao === "aguardando" || t.situacao === "revisao") return "esperando"
+  if (t.situacao === "andamento") return "trabalhando"
+  if ((t.situacao === "concluida" || t.situacao === "parada") && vistas[t.id] !== t.situacao) return "nova"
+  return null
+}
+export function marcarVista(t: Task) {
+  if (estado.vistas[t.id] === t.situacao) return
+  const vistas = { ...estado.vistas, [t.id]: t.situacao }
+  localStorage.setItem(CHAVE_VISTAS, JSON.stringify(vistas))
+  muda({ vistas })
+}
+export const useVistas = () => useEstado().vistas
+
 /** Pedido de abrir uma task (clique na notificação ou no toast): o App troca para o projeto e o ProjetoAberto escolhe a task. */
 let pedidoAbrir: { projetoId: string; taskId: string } | null = null
 const ouvintesAbrir = new Set<() => void>()
@@ -94,7 +117,11 @@ function iniciar() {
   iniciado = true
   window.fma.tasks.aoEvento(aoEvento)
   window.fma.geral.aoAbrirTask(abrirTask)
-  void window.fma.tasks.listar().then((tasks) => muda({ tasks, carregado: true }))
+  void window.fma.tasks.listar().then((tasks) => {
+    // Primeira vez com a atenção: o que já existia conta como visto (não acende tudo de uma vez).
+    if (!vistasSalvas()) { const vistas = Object.fromEntries(tasks.map((t) => [t.id, t.situacao])); localStorage.setItem(CHAVE_VISTAS, JSON.stringify(vistas)); return muda({ tasks, carregado: true, vistas }) }
+    muda({ tasks, carregado: true })
+  })
 }
 
 function useEstado() {

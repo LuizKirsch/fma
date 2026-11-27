@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils"
 import type { SituacaoTask, Task } from "@shared/task"
 import type { Projeto } from "@shared/projeto"
 import { useCartas } from "@/data/cartas"
-import { aceitarTask, descartarTask, devolverCarta, iniciarTask, iniciarTodas, pedirAjuste, progresso, reabrirTask, revisarTask, tirarCarta, tirarDaFila, useDetalhe, usePrevia, useTasks } from "@/data/tasks"
+import { aceitarTask, atencaoDa, descartarTask, devolverCarta, iniciarTask, iniciarTodas, pedirAjuste, progresso, reabrirTask, revisarTask, tirarCarta, tirarDaFila, useDetalhe, usePrevia, useTasks, useVistas } from "@/data/tasks"
 import { FerramentasDaTask, Trilha, usePassos, type Passo } from "@/components/Trilha"
-import { BadgeSituacao, BotaoParar, Barra, nomeDaTask, rotuloDaTask } from "@/components/TaskUi"
+import { BadgeSituacao, BotaoParar, Barra, nomeDaTask, PontoAtencao, rotuloDaTask } from "@/components/TaskUi"
 import { ContextoProjeto, EditorContexto } from "@/components/Contexto"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Button } from "@/components/ui/button"
@@ -88,6 +88,7 @@ function CartaoTask({ task, acompanhada, acoes }: { task: Task; acompanhada: boo
   const passos = usePassos(task, detalhe, previa, cartas)
   const temCommits = (useTemMudancas(task, task.situacao === "parada") === true || !!task.worktree)
   const [editandoContexto, setEditandoContexto] = useState(false)
+  const atencao = atencaoDa(task, useVistas())
   const salvarContexto = async (texto: string) => {
     const r = await window.fma.contexto.task(task.id, texto)
     if (!r.ok) toast.error(r.erro)
@@ -102,8 +103,9 @@ function CartaoTask({ task, acompanhada, acoes }: { task: Task; acompanhada: boo
     <article className={cn("flex flex-col gap-3 rounded-xl border bg-card p-4", acompanhada && "border-primary/70 ring-1 ring-primary/30")}>
       <div className="flex items-center gap-2">
         <button onClick={acoes.escolher} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-pressed={acompanhada} aria-label={`Acompanhar a task ${rotuloDaTask(task)}`}>
+          <PontoAtencao atencao={atencao} />
           <span className="font-mono text-xs text-muted-foreground">{rotuloDaTask(task)}</span>
-          <span className="truncate font-display text-sm">{nomeDaTask(task)}</span>
+          <span className={cn("truncate font-display text-sm", atencao === "nova" && "font-semibold")}>{nomeDaTask(task)}</span>
         </button>
         <BadgeSituacao task={task} />
         {task.situacao === "pronta" && <>

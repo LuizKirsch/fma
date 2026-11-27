@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 import type { Projeto } from "@shared/projeto"
 import { reordenarProjetos, useProjetos } from "@/data/projetos"
 import { ProjetoAberto } from "@/views/ProjetoAberto"
-import { pendenciasDe, situacaoDoProjeto, useTasks } from "@/data/tasks"
+import { atencaoDa, pendenciasDe, situacaoDoProjeto, useTasks, useVistas } from "@/data/tasks"
 import { Badge } from "@/components/ui/badge"
 import { NovoProjeto } from "@/components/NovoProjeto"
 import { AjustesProjeto } from "@/components/AjustesProjeto"
@@ -31,6 +31,8 @@ export function Projetos({ aba, setAba, forjar, irColecao, aoCriar }: { aba: str
   const [ajustes, setAjustes] = useState<Projeto | null>(null)
   const [arrastada, setArrastada] = useState<string | null>(null)
   const tasks = useTasks()
+  const vistas = useVistas()
+  const novas = (id: string) => tasks.filter((t) => t.projetoId === id && atencaoDa(t, vistas) === "nova").length
   const atual = projetos.find((p) => p.id === aba)
   const cartasDe = (id: string) => usos.filter((u) => u.projetoId === id).length
 
@@ -60,7 +62,8 @@ export function Projetos({ aba, setAba, forjar, irColecao, aoCriar }: { aba: str
             <button onClick={() => setAba(p.id)} className="flex min-w-0 flex-col items-start px-3 text-left leading-tight">
               <span className={cn("max-w-[190px] truncate text-sm", p.id === aba && "font-medium")}>{p.nome}</span>
               {/* RF 2.09: rodando, esperando você ou parado */}
-              <span className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground"><span className={cn("size-1.5 rounded-full", SITUACAO_ABA[situacaoDoProjeto(tasks, p.id)].ponto)} />{SITUACAO_ABA[situacaoDoProjeto(tasks, p.id)].rotulo} · {cartasDe(p.id)} {cartasDe(p.id) === 1 ? "carta" : "cartas"}</span>
+              <span className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground"><span className={cn("size-1.5 rounded-full", SITUACAO_ABA[situacaoDoProjeto(tasks, p.id)].ponto)} />{SITUACAO_ABA[situacaoDoProjeto(tasks, p.id)].rotulo} · {cartasDe(p.id)} {cartasDe(p.id) === 1 ? "carta" : "cartas"}
+                {novas(p.id) > 0 && <span className="text-success" title="Tasks que terminaram desde a última vez que você abriu">· {novas(p.id)} {novas(p.id) === 1 ? "nova" : "novas"}</span>}</span>
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button size="icon-xs" variant="ghost" className="mr-1.5" aria-label={`Menu da aba ${p.nome}`}><ChevronDown /></Button></DropdownMenuTrigger>

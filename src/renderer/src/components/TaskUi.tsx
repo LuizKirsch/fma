@@ -2,7 +2,7 @@
 import { cn } from "@/lib/utils"
 import type { SituacaoTask, Task } from "@shared/task"
 import { Square } from "lucide-react"
-import { pararTask } from "@/data/tasks"
+import { pararTask, type Atencao } from "@/data/tasks"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -19,6 +19,17 @@ export const SITUACAO: Record<SituacaoTask, { rotulo: string; cor: string }> = {
 
 export const nomeDaTask = (t: Task) => t.titulo || t.missao.split("\n")[0].slice(0, 80)
 export const rotuloDaTask = (t: Task) => t.referencia ?? `#${t.numero}`
+
+const ATENCAO: Record<Exclude<Atencao, null>, { classe: string; titulo: string }> = {
+  esperando: { classe: "bg-warning", titulo: "Esperando você" },
+  trabalhando: { classe: "animate-pulse bg-info", titulo: "Trabalhando" },
+  nova: { classe: "bg-success ring-2 ring-success/30", titulo: "Terminou desde a última vez que você abriu" },
+}
+/** Ponto de atenção da task (estilo Orca): esperando você, trabalhando ou terminou e você ainda não viu. */
+export function PontoAtencao({ atencao, className }: { atencao: Atencao; className?: string }) {
+  if (!atencao) return null
+  return <span role="img" aria-label={ATENCAO[atencao].titulo} title={ATENCAO[atencao].titulo} className={cn("size-2 shrink-0 rounded-full", ATENCAO[atencao].classe, className)} />
+}
 
 export function BadgeSituacao({ task }: { task: Task }) {
   const s = SITUACAO[task.situacao]

@@ -9,7 +9,7 @@ import type { Projeto } from "@shared/projeto"
 import { rotuloAmbiente } from "@shared/ambiente"
 import { Badge } from "@/components/ui/badge"
 import type { Task } from "@shared/task"
-import { abrirTask, progresso, useDetalhe, usePedidoAbrir, useTasks, vagasEmUso } from "@/data/tasks"
+import { abrirTask, marcarVista, progresso, useDetalhe, usePedidoAbrir, useTasks, vagasEmUso } from "@/data/tasks"
 import { Mesa } from "@/views/Mesa"
 import { Tasks } from "@/views/Tasks"
 import { Terminal } from "@/views/Terminal"
@@ -60,6 +60,8 @@ export function ProjetoAberto({ projeto, forjar }: { projeto: Projeto; forjar: F
   const esperando = emAndamento.filter((t) => t.situacao === "aguardando")
   const acompanhada = doProjeto.find((t) => t.id === escolhida) ?? emAndamento[0] ?? null
   const detalhe = useDetalhe(acompanhada?.id ?? null)
+  // A task aberta na aba Tasks conta como vista (apaga o "terminou e você não viu").
+  useEffect(() => { if (visao === "tasks" && acompanhada) marcarVista(acompanhada) }, [visao, acompanhada?.id, acompanhada?.situacao]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // RF 3.28: o que cada carta da mesa está fazendo na task acompanhada (só na mesa da task; a do projeto é para montar o time).
   const atividades = new Map((detalhe?.cartas ?? []).filter((c) => c.copia && !c.retirada).map((c) => [c.cartaId, { estado: c.estado, atividade: c.atividade }]))
