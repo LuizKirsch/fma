@@ -21,4 +21,5 @@ assert.deepEqual(s.map((x) => [x.cartaId, x.para.id]), [["rev", "claude-sonnet-5
 assert.deepEqual([s[0].ecoMin, s[0].ecoMax, s[1].ecoMin, s[1].ecoMax], [15, 35, 30, 70])
 assert.equal(sugestoesDeModelo(gs(["pq", 50_000], ["dev", 5_000_000]), cartas as never).length, 1) // >= 50 mil conta mesmo com fatia pequena
 assert.deepEqual(sugestoesDeModelo([], []), [])
+assert.deepEqual(sugestoesDeModelo(gs(["orq", 900_000]), [tc("orq", "orquestrador", "claude", "claude-opus-5-5")] as never), []) // o Orquestrador planeja tudo: nunca sugerir
 console.log("gasto.check ok")

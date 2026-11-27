@@ -24,10 +24,11 @@ export function gastoPorCarta(eventos: EventoTask[]): GastoCarta[] {
 }
 
 /**
- * Classes que não escrevem código: planejam (orquestrador, analise), testam (teste) ou revisam/questionam (revisor, seguranca).
- * Ficam de fora quem escreve (dev), UX (entrega o desenho que o dev segue), PR e o Coringa (papel desconhecido).
+ * Classes que não escrevem código: planejam (analise), testam (teste) ou revisam/questionam (revisor, seguranca).
+ * Ficam de fora quem escreve (dev), UX (entrega o desenho que o dev segue), PR, o Coringa (papel desconhecido)
+ * e o Orquestrador: ele planeja a task inteira, e um modelo mais fraco ali custa mais do que economiza.
  */
-const SEM_CODIGO = new Set(["orquestrador", "analise", "teste", "seguranca", "revisor"])
+const SEM_CODIGO = new Set(["analise", "teste", "seguranca", "revisor"])
 
 export interface SugestaoModelo {
   cartaId: string
