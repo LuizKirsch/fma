@@ -1,7 +1,7 @@
 {
   "name": "fma",
   "productName": "FMA",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "FMA (Fantasy Multi Agents): orquestrador de agentes de IA em formato de jogo de cartas. App desktop para Windows, macOS e Linux.",
   "author": "Luiz Kirsch",
   "license": "UNLICENSED",
