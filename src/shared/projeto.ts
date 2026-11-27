@@ -37,6 +37,8 @@ export interface Projeto {
   pastasCompartilhadas: string[]
   /** Comandos rodados no worktree logo depois de criá-lo, antes das cartas (ex. npm install, cp .env.example .env). */
   preparo: string[]
+  /** Comando-modelo para rodar os testes da task (ex. docker exec -w /var/www/html/{worktree} app php artisan test {arquivos}); vazio = nenhum. */
+  comandoTeste: string
 }
 
 export const PASTAS_PADRAO = ["vendor", "node_modules"]
@@ -52,7 +54,7 @@ export const COMANDOS_PADRAO = [
   "git status *", "git diff *", "git log *", "git show *",
 ]
 
-export type AjustesProjeto = Pick<Projeto, "nome" | "repositorio" | "branchBase" | "vagas" | "limiteDevolucoes" | "limiteTokens" | "comandos" | "pastasCompartilhadas" | "preparo">
+export type AjustesProjeto = Pick<Projeto, "nome" | "repositorio" | "branchBase" | "vagas" | "limiteDevolucoes" | "limiteTokens" | "comandos" | "pastasCompartilhadas" | "preparo" | "comandoTeste">
 export type PreferenciasMesa = Pick<Projeto, "conexoesVisiveis" | "mostrarSugestoes" | "vista">
 
 export interface NovoProjeto {
@@ -92,4 +94,13 @@ export function validarAjustes(a: AjustesProjeto): string | null {
   const ruim = (a.pastasCompartilhadas ?? []).map((p) => p.trim()).filter(Boolean).find((p) => !pastaValida(p))
   if (ruim) return `Pasta ligada inválida: "${ruim}". Use nomes relativos, sem "..", sem caminho absoluto e sem .env.`
   return null
+}
+
+/**
+ * Expande o comando-modelo de teste: {worktree} vira o caminho do worktree relativo ao repositório (barras `/`).
+ * `liberado` é o comando até antes de {arquivos} (o que vai no --allowedTools); `comando` tira o {arquivos}, para rodar tudo.
+ */
+export function comandoDeTeste(modelo: string, worktreeRelativo: string): { comando: string; liberado: string; expandido: string } {
+  const m = modelo.trim().replace(/\{worktree\}/g, worktreeRelativo.replace(/\\/g, "/"))
+  return { comando: m.replace(/\s*\{arquivos\}/g, "").trim(), liberado: m.split("{arquivos}")[0].trim(), expandido: m }
 }

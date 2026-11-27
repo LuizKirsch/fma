@@ -3,11 +3,12 @@
  * últimas linhas da CLI dela; embaixo, o console (xterm) e terminais de verdade no worktree, inclusive na sessão de uma carta.
  */
 import { useEffect, useRef, useState } from "react"
-import { Plus, ScrollText, SquareTerminal, X } from "lucide-react"
+import { FlaskConical, Plus, ScrollText, SquareTerminal, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { DetalheTask } from "@shared/task"
 import { useCartas } from "@/data/cartas"
 import { useConsole, type LinhaConsole } from "@/data/tasks"
+import { useProjetos } from "@/data/projetos"
 import { nomeadorDe } from "@/components/PainelTask"
 import { ConsoleXterm, ShellXterm, separarFerramenta } from "@/components/Xterm"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
@@ -40,11 +41,12 @@ function Linhas({ linhas, nome, comNome, className }: { linhas: LinhaConsole[]; 
   )
 }
 
-type Aba = { chave: string; titulo: string; cartaId: string | null }
+type Aba = { chave: string; titulo: string; cartaId: string | null; testar?: boolean }
 
 export function Terminal({ detalhe }: { detalhe: DetalheTask | null }) {
   const { cartas } = useCartas()
   const linhas = useConsole(detalhe?.task.id ?? null)
+  const { projetos } = useProjetos()
   const [abas, setAbas] = useState<Aba[]>([])
   const [ativa, setAtiva] = useState("console")
   if (!detalhe) return (
@@ -52,9 +54,9 @@ export function Terminal({ detalhe }: { detalhe: DetalheTask | null }) {
   )
   const nome = nomeadorDe(detalhe, cartas)
   const quadros = detalhe.cartas.filter((c) => !c.retirada && c.copia)
-  const abrir = (titulo: string, cartaId: string | null) => {
+  const abrir = (titulo: string, cartaId: string | null, testar?: boolean) => {
     const chave = crypto.randomUUID()
-    setAbas((l) => [...l, { chave, titulo, cartaId }])
+    setAbas((l) => [...l, { chave, titulo, cartaId, testar }])
     setAtiva(chave)
   }
   const fechar = (chave: string) => { setAbas((l) => l.filter((a) => a.chave !== chave)); if (ativa === chave) setAtiva("console") }
@@ -89,14 +91,17 @@ export function Terminal({ detalhe }: { detalhe: DetalheTask | null }) {
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
         <div role="tablist" className="flex shrink-0 items-end gap-0.5 border-b px-2 pt-1">
           {aba("console", <><ScrollText className="size-3.5" />Console</>)}
-          {abas.map((a) => aba(a.chave, <><SquareTerminal className="size-3.5" />{a.cartaId ? a.titulo : "Shell"}</>, true))}
+          {abas.map((a) => aba(a.chave, <><SquareTerminal className="size-3.5" />{a.cartaId || a.testar ? a.titulo : "Shell"}</>, true))}
           <button aria-label="Novo terminal no worktree" title="Novo terminal no worktree da task" onClick={() => abrir("Shell", null)} className="mb-1 ml-1 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Plus className="size-3.5" /></button>
+          {projetos.find((p) => p.id === detalhe.task.projetoId)?.comandoTeste.trim() && (
+            <button title="Abre um terminal já rodando o comando de teste do projeto" onClick={() => abrir("Testes", null, true)} className="mb-1 ml-1 flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><FlaskConical className="size-3.5" />Testar</button>
+          )}
           <span className="mb-1.5 ml-auto text-[11px] text-muted-foreground">task {detalhe.task.referencia ?? `#${detalhe.task.numero}`}</span>
         </div>
         <div className="relative min-h-0 flex-1">
           <div className={cn("absolute inset-0", ativa !== "console" && "invisible")}><ConsoleXterm linhas={linhas} nome={nome} comNome /></div>
           {/* os shells ficam montados (invisíveis) ao trocar de aba: o PTY continua vivo */}
-          {abas.map((a) => <div key={a.chave} className={cn("absolute inset-0", ativa !== a.chave && "invisible")}><ShellXterm taskId={detalhe.task.id} cartaId={a.cartaId} /></div>)}
+          {abas.map((a) => <div key={a.chave} className={cn("absolute inset-0", ativa !== a.chave && "invisible")}><ShellXterm taskId={detalhe.task.id} cartaId={a.cartaId} testar={a.testar} /></div>)}
         </div>
       </section>
     </div>

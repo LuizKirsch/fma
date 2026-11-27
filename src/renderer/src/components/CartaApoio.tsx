@@ -112,8 +112,8 @@ export function EditorApoio({ carta, tipo, time, aoFechar, aoSalvo, aoRemover }:
     if (!c) return
     // Orçamento: o limite é o de tokens por task do projeto; é ele que o Maestro vigia (RF 6.40).
     if (tipo!.chave === "orcamento" && proj && f!.limite !== proj.limiteTokens) {
-      const { nome, repositorio, branchBase, vagas, limiteDevolucoes, comandos, pastasCompartilhadas, preparo } = proj
-      if (!ok(await atualizarProjeto(proj.id, { nome, repositorio, branchBase, vagas, limiteDevolucoes, limiteTokens: f!.limite, comandos, pastasCompartilhadas, preparo }))) return
+      const { nome, repositorio, branchBase, vagas, limiteDevolucoes, comandos, pastasCompartilhadas, preparo, comandoTeste } = proj
+      if (!ok(await atualizarProjeto(proj.id, { nome, repositorio, branchBase, vagas, limiteDevolucoes, limiteTokens: f!.limite, comandos, pastasCompartilhadas, preparo, comandoTeste }))) return
     }
     aoSalvo(c); aoFechar()
   }

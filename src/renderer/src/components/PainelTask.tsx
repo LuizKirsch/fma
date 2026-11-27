@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { DetalheTask, DiffTask, Task, TipoEvento } from "@shared/task"
 import type { Carta } from "@shared/tipos"
+import { gastoPorCarta } from "@shared/gasto"
 import { carregarDetalhe, progresso } from "@/data/tasks"
 import { EntregaApoio } from "@/components/EntregaApoio"
 import { BadgeSituacao, Barra, nomeDaTask, rotuloDaTask } from "@/components/TaskUi"
@@ -64,8 +65,37 @@ function Mudancas({ task }: { task: Task }) {
   )
 }
 
-type Aba = "card" | "entrega" | "mudancas" | "historico"
-const ABAS: { id: Aba; rotulo: string }[] = [{ id: "card", rotulo: "Card" }, { id: "entrega", rotulo: "Entrega" }, { id: "mudancas", rotulo: "Mudanças" }, { id: "historico", rotulo: "Histórico" }]
+type Aba = "card" | "entrega" | "mudancas" | "gasto" | "historico"
+const ABAS: { id: Aba; rotulo: string }[] = [{ id: "card", rotulo: "Card" }, { id: "entrega", rotulo: "Entrega" }, { id: "mudancas", rotulo: "Mudanças" }, { id: "gasto", rotulo: "Gasto" }, { id: "historico", rotulo: "Histórico" }]
+
+const fmt = (n: number) => n.toLocaleString("pt-BR")
+
+/** Tokens por carta (barra na cor da carta) e, abaixo, cada etapa/volta que gastou. */
+function Gasto({ detalhe, nome }: { detalhe: DetalheTask; nome: (id: string | null) => string }) {
+  const gastos = gastoPorCarta(detalhe.eventos)
+  const total = gastos.reduce((s, g) => s + g.total, 0)
+  if (!total) return <p className="text-muted-foreground">Nenhum gasto registrado ainda.</p>
+  const cor = (id: string | null) => detalhe.cartas.find((c) => c.cartaId === id)?.copia?.cor
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-xs text-muted-foreground">Total <span className="font-mono text-foreground tabular">{fmt(total)}</span> tokens{total !== detalhe.task.tokens && <> (a task registra {fmt(detalhe.task.tokens)})</>}</p>
+      {gastos.map((g) => (
+        <section key={g.cartaId ?? "sistema"} className="flex flex-col gap-1">
+          <h4 className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            <span className="size-2 rounded-full" style={{ background: cor(g.cartaId) }} />{nome(g.cartaId) || "Sistema"}
+            <span className="ml-auto font-mono normal-case tabular">{fmt(g.total)} · {Math.round((g.total / total) * 100)}%</span>
+          </h4>
+          <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${(g.total / total) * 100}%`, background: cor(g.cartaId) }} /></div>
+          <ol className="flex flex-col gap-0.5 text-xs">
+            {g.etapas.map((e, i) => (
+              <li key={e.id} className="flex items-center gap-2"><span className="text-muted-foreground">{i + 1}.</span><span className={TIPO[e.tipo].cor}>{TIPO[e.tipo].rotulo}</span><span className="ml-auto font-mono tabular">{fmt(e.tokens ?? 0)}</span></li>
+            ))}
+          </ol>
+        </section>
+      ))}
+    </div>
+  )
+}
 
 /** O card da fonte (spec) em texto; vale já antes de iniciar. Títulos "# " e "## " em negrito. */
 function Card({ task }: { task: Task }) {
@@ -130,7 +160,7 @@ export function PainelTask({ detalhe, cartas }: { detalhe: DetalheTask; cartas: 
             ))}
             <EntregaApoio taskId={task.id} projetoId={task.projetoId} />
           </div>
-        ) : aba === "mudancas" ? <Mudancas task={task} /> : (
+        ) : aba === "mudancas" ? <Mudancas task={task} /> : aba === "gasto" ? <Gasto detalhe={detalhe} nome={nome} /> : (
           <ol className="flex flex-col gap-3">
             {detalhe.eventos.length === 0 && <li className="text-muted-foreground">Os eventos da task aparecem aqui.</li>}
             {detalhe.eventos.map((e) => (

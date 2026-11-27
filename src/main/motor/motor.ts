@@ -8,7 +8,7 @@ import type { DatabaseSync } from "node:sqlite"
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { caminhos, ehWsl, LOCAL, paraFs, rodar } from "../ambiente"
 import { promptFinal } from "@shared/carta"
-import { pastaValida } from "@shared/projeto"
+import { comandoDeTeste, pastaValida } from "@shared/projeto"
 import { cliPorId, type CliId } from "@shared/ia"
 import type { Resultado } from "@shared/tipos"
 import type { CopiaCarta, DecisaoPendente, DiffTask, EstadoCarta, EventoMotor, NovaTask, PreviaTask, Task, TipoEvento } from "@shared/task"
@@ -182,6 +182,9 @@ async function faltaContaDe(db: DatabaseSync, ids: string[], amb: string): Promi
   return semLogin.length ? `Conta sem login na CLI: ${semLogin.join(", ")}. Entre de novo em Conexões.` : null
 }
 
+/** Comando de teste do projeto expandido para o worktree (caminho relativo ao repositório); null se o projeto não tem. */
+const testeDoProjeto = (p: ProjetoLido, wt: string) => p.comandoTeste.trim() ? comandoDeTeste(p.comandoTeste, caminhos(p.ambiente).relative(p.repositorio, wt)) : null
+
 const caminhoWorktree = (p: ProjetoLido, numero: number) => {
   const P = caminhos(p.ambiente)
   return P.join(p.repositorio, ".fma", "worktrees", `task-${numero}`) // dentro do repositório: um container que monta o repo enxerga a task; o git ignora via info/exclude
@@ -204,11 +207,11 @@ async function prepararWorktree(projeto: ProjetoLido, wt: string, aviso: (t: str
   }
   try {
     const comum = P.resolve(repo, (await git(repo, ["rev-parse", "--git-common-dir"], amb)).trim())
-    const arq = paraFs(amb, P.join(comum, "info", "exclude"))
+    const exclude = P.join(comum, "info", "exclude"), arq = paraFs(amb, exclude)
     const atual = existsSync(arq) ? readFileSync(arq, "utf8") : ""
     const tem = new Set(atual.split(/\r?\n/).map((l) => l.trim()))
     const falta = [".fma/", ...ligadas.map((p) => `/${p.replace(/\\/g, "/")}`)].filter((l) => !tem.has(l)) // symlink não casa com "vendor/" do .gitignore: sem isso o git add -A o versionaria
-    if (falta.length) { mkdirSync(paraFs(amb, P.dirname(arq)), { recursive: true }); writeFileSync(arq, `${atual && !atual.endsWith("\n") ? "\n" : ""}${falta.join("\n")}\n`) }
+    if (falta.length) { mkdirSync(paraFs(amb, P.dirname(exclude)), { recursive: true }); writeFileSync(arq, `${atual && !atual.endsWith("\n") ? "\n" : ""}${falta.join("\n")}\n`) }
   } catch (e) { aviso(`Não consegui atualizar o info/exclude do repositório: ${(e as Error).message}`) }
   // Comandos de preparo do projeto (npm install, cp .env...), na ordem. Falha só avisa: as cartas ainda podem corrigir.
   for (const linha of projeto.preparo.map((c) => c.trim()).filter(Boolean)) {
@@ -237,7 +240,9 @@ ${f.contexto}`
     }
   } catch (e) { registrar(ctx, "aviso", `Não consegui preparar as ferramentas de ${c.nome}: ${(e as Error).message}`, id) }
   // Comandos liberados do projeto. Só a Claude pede aprovação por comando; o codex roda no sandbox do worktree.
-  if (c.cli === "claude" && ctx.projeto.comandos.length) extras = [...extras, "--allowedTools", ...ctx.projeto.comandos.map((k) => `Bash(${k})`)]
+  const teste = testeDoProjeto(ctx.projeto, ctx.task.worktree!)
+  const liberados = [...ctx.projeto.comandos.map((k) => `Bash(${k})`), ...(teste?.liberado ? [`Bash(${teste.liberado}*)`] : [])]
+  if (c.cli === "claude" && liberados.length) extras = [...extras, "--allowedTools", ...liberados]
   const conta = contaDaCarta(ctx.db, c.cli, c.contaId, amb) // a da carta (se é do ambiente do projeto), ou a padrão da CLI nele
   if (ctx.parada || ctx.travada || ctxs.get(ctx.task.id) !== ctx) return { texto: "", tokens: 0, erro: "Interrompida." } // a task parou durante a preparação
   const wt = ctx.task.worktree!
@@ -268,6 +273,14 @@ function blocoContexto(ctx: Ctx): string {
   return [p && `## Contexto do projeto\n${p}`, t && `## Contexto desta task\n${t}`, c && `## Card da fonte (spec)\n${c}`].filter(Boolean).join("\n\n")
 }
 
+/** Como rodar os testes deste projeto, já para o worktree da task (vazio sem comando configurado). */
+function secaoTestes(ctx: Ctx): string {
+  const t = ctx.task.worktree && testeDoProjeto(ctx.projeto, ctx.task.worktree)
+  if (!t) return ""
+  const quais = t.expandido.includes("{arquivos}") ? "\nTroque {arquivos} pelos testes que você quer rodar, ou tire-o para rodar tudo." : ""
+  return `## Como rodar os testes deste projeto\nUse este comando; ele já enxerga o seu worktree:\n\`${t.expandido}\`${quais}`
+}
+
 /** Contexto da task: só antes de iniciar (pronta ou na fila). */
 export function definirContextoTask(db: DatabaseSync, id: string, texto: string): Resultado<null> {
   const t = lerTask(db, id)
@@ -287,6 +300,7 @@ function entrada(ctx: Ctx, id: string): string {
     c.prompt,
     `---\n# Task #${t.numero}${t.titulo ? `: ${t.titulo}` : ""}\n## Missão\n${t.missao}${t.ajustes ? `\n## Ajustes pedidos\n${t.ajustes}` : ""}`,
     blocoContexto(ctx),
+    secaoTestes(ctx),
     secaoDecisoes(t.decisoes),
     `## Sua tarefa no plano\n${ctx.tarefas.get(id) ?? t.missao}`,
     recebido.length ? `## O que você recebeu\n${recebido.map((de) => `### De ${nome(ctx, de)}\n${ctx.entregas.get(de)}`).join("\n\n")}` : "",

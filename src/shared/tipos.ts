@@ -68,9 +68,9 @@ export type Resultado<T> = { ok: true; valor: T } | { ok: false; erro: string }
 
 export interface FmaApi {
   plataforma: string
-  /** Terminal de verdade (PTY) no worktree da task; com cartaId, entra na sessão da carta. */
+  /** Terminal de verdade (PTY) no worktree da task; com cartaId, entra na sessão da carta; com testar, já roda o comando de teste do projeto. */
   terminal: {
-    abrir(taskId: string, cartaId: string | null, cols: number, rows: number): Promise<Resultado<string>>
+    abrir(taskId: string, cartaId: string | null, cols: number, rows: number, testar?: boolean): Promise<Resultado<string>>
     escrever(id: string, dados: string): void
     redimensionar(id: string, cols: number, rows: number): void
     fechar(id: string): void

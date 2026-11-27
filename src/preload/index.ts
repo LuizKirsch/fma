@@ -16,7 +16,7 @@ const escutar = <T,>(canal: string) => (cb: (e: T) => void) => {
 const api: FmaApi = {
   plataforma: process.platform,
   terminal: {
-    abrir: (taskId, cartaId, cols, rows) => ipcRenderer.invoke("pty:abrir", taskId, cartaId, cols, rows),
+    abrir: (taskId, cartaId, cols, rows, testar) => ipcRenderer.invoke("pty:abrir", taskId, cartaId, cols, rows, testar),
     escrever: (id, dados) => ipcRenderer.send("pty:escrever", id, dados),
     redimensionar: (id, cols, rows) => ipcRenderer.send("pty:redimensionar", id, cols, rows),
     fechar: (id) => ipcRenderer.send("pty:fechar", id),

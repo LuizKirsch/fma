@@ -71,7 +71,7 @@ export function ConsoleXterm({ linhas, nome, comNome }: { linhas: LinhaConsole[]
 }
 
 /** Shell real no worktree da task; com `cartaId`, entra na sessão da carta. Fecha o PTY ao desmontar. */
-export function ShellXterm({ taskId, cartaId }: { taskId: string; cartaId: string | null }) {
+export function ShellXterm({ taskId, cartaId, testar }: { taskId: string; cartaId: string | null; testar?: boolean }) {
   const ref = useXterm((t, fit) => {
     let id: string | null = null, vivo = true
     const tirarEvento = window.fma.terminal.aoEvento((e) => {
@@ -82,7 +82,7 @@ export function ShellXterm({ taskId, cartaId }: { taskId: string; cartaId: strin
     const entrada = t.onData((d) => id && window.fma.terminal.escrever(id, d))
     const tamanho = t.onResize(({ cols, rows }) => id && window.fma.terminal.redimensionar(id, cols, rows))
     fit()
-    void window.fma.terminal.abrir(taskId, cartaId, t.cols, t.rows).then((r) => {
+    void window.fma.terminal.abrir(taskId, cartaId, t.cols, t.rows, testar).then((r) => {
       if (!r.ok) return t.write(`\x1b[31m${r.erro}\x1b[0m\r\n`)
       if (!vivo) return window.fma.terminal.fechar(r.valor)
       id = r.valor

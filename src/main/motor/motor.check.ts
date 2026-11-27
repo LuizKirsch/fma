@@ -8,6 +8,8 @@ import { lerSaida, linhaDeConsole, extrairJson, statusDaEntrega, semLinhaStatus,
 // @ts-ignore TS5097
 import { buscarTasks, cartaEmUso, listarTasks, mensagemCartaEmUso } from "./dados.ts"
 // @ts-ignore TS5097
+import { comandoDeTeste } from "../../shared/projeto.ts"
+// @ts-ignore TS5097
 import { MIGRACOES_MOTOR } from "./migracoes.ts"
 
 const c = (id: string, orquestrador = false) => ({ id, nome: id, orquestrador })
@@ -133,5 +135,15 @@ const dec = [decisaoResposta("testes não rodaram: sem vendor/", "valido depois"
 assert.match(dec, /^- Sobre "testes não rodaram: sem vendor\/": valido depois\n- O usuário aceitou seguir sem resolver: "testes não rodaram"\. Não trave de novo/)
 assert.match(secaoDecisoes(dec), /Decisões do usuário nesta task \(valem para todas as cartas\)[\s\S]*Não use FMA-STATUS: bloqueado[\s\S]*Revisor não devolve/)
 assert.equal(secaoDecisoes(""), "")
+
+// comando de teste do projeto: {worktree} relativo, {arquivos} opcional
+const modeloTeste = "docker exec -w /var/www/html/{worktree} app php artisan test {arquivos}"
+assert.deepEqual(comandoDeTeste(modeloTeste, ".fma\\worktrees\\task-7"), {
+  comando: "docker exec -w /var/www/html/.fma/worktrees/task-7 app php artisan test",
+  liberado: "docker exec -w /var/www/html/.fma/worktrees/task-7 app php artisan test",
+  expandido: "docker exec -w /var/www/html/.fma/worktrees/task-7 app php artisan test {arquivos}",
+})
+assert.equal(comandoDeTeste("make test", ".fma/worktrees/task-1").liberado, "make test")
+assert.equal(comandoDeTeste("npm test -- {arquivos} --ci", "x").liberado, "npm test --")
 
 console.log("motor.check: ok")

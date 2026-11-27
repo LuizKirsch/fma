@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 
-const doProjeto = (p: Projeto): Ajustes => ({ nome: p.nome, repositorio: p.repositorio, branchBase: p.branchBase, vagas: p.vagas, limiteDevolucoes: p.limiteDevolucoes, limiteTokens: p.limiteTokens, comandos: p.comandos, pastasCompartilhadas: p.pastasCompartilhadas, preparo: p.preparo })
+const doProjeto = (p: Projeto): Ajustes => ({ nome: p.nome, repositorio: p.repositorio, branchBase: p.branchBase, vagas: p.vagas, limiteDevolucoes: p.limiteDevolucoes, limiteTokens: p.limiteTokens, comandos: p.comandos, pastasCompartilhadas: p.pastasCompartilhadas, preparo: p.preparo, comandoTeste: p.comandoTeste })
 
 export function AjustesProjeto({ projeto, aoFechar }: { projeto: Projeto | null; aoFechar: () => void }) {
   const [a, setA] = useState<Ajustes | null>(null)
@@ -121,6 +121,11 @@ export function AjustesProjeto({ projeto, aoFechar }: { projeto: Projeto | null;
               <FieldLabel htmlFor="aj-preparo">Ao criar o worktree, rodar</FieldLabel>
               <Textarea id="aj-preparo" rows={3} className="font-mono text-xs" placeholder={"npm install\ncp .env.example .env"} value={a.preparo.join("\n")} onChange={(e) => muda({ preparo: e.target.value.split("\n") })} />
               <FieldDescription>Um por linha, na ordem, dentro do worktree e antes de as cartas começarem. Se um falhar, a task segue e o erro aparece na crônica.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="aj-teste">Como rodar os testes</FieldLabel>
+              <Input id="aj-teste" className="font-mono text-xs" placeholder="docker exec -w /var/www/html/{worktree} app php artisan test {arquivos}" value={a.comandoTeste} onChange={(e) => muda({ comandoTeste: e.target.value })} />
+              <FieldDescription>{"{worktree}"} vira o caminho do worktree da task a partir da raiz do repositório (.fma/worktrees/task-N). {"{arquivos}"} é opcional: é onde a carta põe os testes que quer rodar. As cartas do Claude rodam esse comando sem pedir aprovação.</FieldDescription>
             </Field>
           </FieldGroup>
           <DialogFooter className="sm:justify-between">

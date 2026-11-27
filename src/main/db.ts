@@ -206,6 +206,10 @@ const MIGRACOES: string[] = [
   `
   ALTER TABLE projeto ADD COLUMN preparo TEXT;
   `,
+  // Como rodar os testes do projeto: comando-modelo com {worktree} e {arquivos} (null = nenhum).
+  `
+  ALTER TABLE projeto ADD COLUMN comando_teste TEXT;
+  `,
   // Próxima migração: item novo AQUI no fim.
 ]
 
