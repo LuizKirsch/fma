@@ -254,6 +254,8 @@ export interface FmaApi {
   contexto: {
     projeto(id: string, texto: string): Promise<Resultado<null>>
     task(id: string, texto: string): Promise<Resultado<null>>
+    /** Motivos das decisões pedidas em outras tasks do projeto. */
+    decisoes(projetoId: string, exceto: string): Promise<string[]>
   }
   geral: {
     /** RF 2.16 e 2.18: time e fluxo de cada projeto. */

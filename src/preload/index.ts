@@ -167,6 +167,7 @@ const api: FmaApi = {
   contexto: {
     projeto: (id, texto) => ipcRenderer.invoke("contexto:projeto", id, texto),
     task: (id, texto) => ipcRenderer.invoke("contexto:task", id, texto),
+    decisoes: (projetoId, exceto) => ipcRenderer.invoke("contexto:decisoes", projetoId, exceto),
   },
   geral: {
     resumo: () => ipcRenderer.invoke("geral:resumo"),

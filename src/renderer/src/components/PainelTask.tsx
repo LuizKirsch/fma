@@ -7,8 +7,11 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { DetalheTask, DiffTask, Task, TipoEvento } from "@shared/task"
 import type { Carta } from "@shared/tipos"
-import { gastoPorCarta } from "@shared/gasto"
+import { gastoPorCarta, sugestoesDeModelo, type SugestaoModelo } from "@shared/gasto"
+import { CLASSES, type ClasseId } from "@shared/catalogo"
 import { carregarDetalhe, progresso } from "@/data/tasks"
+import { salvarCarta } from "@/data/cartas"
+import { Button } from "@/components/ui/button"
 import { EntregaApoio } from "@/components/EntregaApoio"
 import { BadgeSituacao, Barra, nomeDaTask, rotuloDaTask } from "@/components/TaskUi"
 
@@ -71,11 +74,22 @@ const ABAS: { id: Aba; rotulo: string }[] = [{ id: "card", rotulo: "Card" }, { i
 const fmt = (n: number) => n.toLocaleString("pt-BR")
 
 /** Tokens por carta (barra na cor da carta) e, abaixo, cada etapa/volta que gastou. */
-function Gasto({ detalhe, nome }: { detalhe: DetalheTask; nome: (id: string | null) => string }) {
+function Gasto({ detalhe, nome, cartas }: { detalhe: DetalheTask; nome: (id: string | null) => string; cartas: Carta[] }) {
   const gastos = gastoPorCarta(detalhe.eventos)
   const total = gastos.reduce((s, g) => s + g.total, 0)
   if (!total) return <p className="text-muted-foreground">Nenhum gasto registrado ainda.</p>
   const cor = (id: string | null) => detalhe.cartas.find((c) => c.cartaId === id)?.copia?.cor
+  // Some se a carta da coleção não é mais a da task ou já foi trocada para outro modelo.
+  const sugestoes = sugestoesDeModelo(gastos, detalhe.cartas).filter((s) => {
+    const viva = cartas.find((c) => c.id === s.cartaId)
+    return viva && viva.cli === detalhe.cartas.find((c) => c.cartaId === s.cartaId)?.copia?.cli && viva.modelo === s.de.id
+  })
+  const usar = async (s: SugestaoModelo) => {
+    const viva = cartas.find((c) => c.id === s.cartaId)
+    if (!viva) return
+    const r = await salvarCarta({ ...viva, modelo: s.para.id })
+    if (r.ok) toast.success(`${viva.nome} agora usa ${s.para.nome} nas próximas tasks`); else toast.error(r.erro)
+  }
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-muted-foreground">Total <span className="font-mono text-foreground tabular">{fmt(total)}</span> tokens{total !== detalhe.task.tokens && <> (a task registra {fmt(detalhe.task.tokens)})</>}</p>
@@ -93,6 +107,18 @@ function Gasto({ detalhe, nome }: { detalhe: DetalheTask; nome: (id: string | nu
           </ol>
         </section>
       ))}
+      {sugestoes.length > 0 && (
+        <section className="flex flex-col gap-2 border-t pt-3">
+          <h4 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Sugestões</h4>
+          {sugestoes.map((s) => (
+            <div key={s.cartaId} className="flex items-center gap-3 rounded-lg border bg-muted/30 p-2 text-xs">
+              <p className="min-w-0 flex-1">{nome(s.cartaId)} ({CLASSES[s.classe as ClasseId]?.nome ?? s.classe}) usa {s.de.nome}; para esse papel, {s.para.nome} costuma bastar. Economia estimada: ~{s.ecoMin}–{s.ecoMax}%.</p>
+              <Button size="sm" variant="outline" onClick={() => void usar(s)}>Usar {s.para.nome}</Button>
+            </div>
+          ))}
+          <p className="text-[11px] text-muted-foreground">Vale para as próximas tasks (muda a carta na coleção); esta task não muda.</p>
+        </section>
+      )}
     </div>
   )
 }
@@ -160,7 +186,7 @@ export function PainelTask({ detalhe, cartas }: { detalhe: DetalheTask; cartas: 
             ))}
             <EntregaApoio taskId={task.id} projetoId={task.projetoId} />
           </div>
-        ) : aba === "mudancas" ? <Mudancas task={task} /> : aba === "gasto" ? <Gasto detalhe={detalhe} nome={nome} /> : (
+        ) : aba === "mudancas" ? <Mudancas task={task} /> : aba === "gasto" ? <Gasto detalhe={detalhe} nome={nome} cartas={cartas} /> : (
           <ol className="flex flex-col gap-3">
             {detalhe.eventos.length === 0 && <li className="text-muted-foreground">Os eventos da task aparecem aqui.</li>}
             {detalhe.eventos.map((e) => (

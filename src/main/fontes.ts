@@ -200,5 +200,9 @@ export function registrarIpcFontes(db: DatabaseSync) {
     db.prepare("UPDATE projeto SET contexto = ? WHERE id = ?").run(texto.trim(), id)
     return ok(null)
   })
+  // motivos de decisão já gravados em outras tasks do projeto (para destacar travas repetidas)
+  ipcMain.handle("contexto:decisoes", (_e, projetoId: string, exceto: string) =>
+    (db.prepare("SELECT DISTINCT e.texto FROM evento_task e JOIN task t ON t.id = e.task_id WHERE t.projeto_id = ? AND e.task_id <> ? AND e.tipo = 'decisao'")
+      .all(projetoId, exceto) as { texto: string }[]).map((l) => l.texto))
   ipcMain.handle("contexto:task", (_e, id: string, texto: string) => definirContextoTask(db, id, texto))
 }
