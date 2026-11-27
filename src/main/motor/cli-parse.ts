@@ -30,6 +30,12 @@ export function lerSaida(cli: string, bruto: string, entrada = ""): Saida {
   return { texto, tokens: Math.ceil((entrada.length + texto.length) / 4), erro: texto ? null : "A CLI não devolveu resposta." }
 }
 
+/** O primeiro texto da entrada da ferramenta (command, file_path, pattern...) em vez do JSON escapado. */
+const resumoFerramenta = (input: unknown): string => {
+  const v = Object.values(input ?? {}).find((x) => typeof x === "string") as string | undefined
+  return (v ?? JSON.stringify(input) ?? "").replace(/\s+/g, " ").slice(0, 200)
+}
+
 /** Uma linha de console legível a partir de uma linha da saída em streaming. */
 export function linhaDeConsole(cli: string, linha: string): string | null {
   if (cli === "gemini") return linha
@@ -38,7 +44,7 @@ export function linhaDeConsole(cli: string, linha: string): string | null {
   if (cli === "claude") {
     if (j.type === "assistant") {
       return (j.message?.content ?? [])
-        .map((b: any) => (b.type === "text" ? b.text : b.type === "tool_use" ? `[${b.name}] ${JSON.stringify(b.input).slice(0, 160)}` : ""))
+        .map((b: any) => (b.type === "text" ? b.text : b.type === "tool_use" ? `[${b.name}] ${resumoFerramenta(b.input)}` : ""))
         .filter(Boolean).join("\n") || null
     }
     return null

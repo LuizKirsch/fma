@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite"
 // @ts-ignore TS5097: a extensão .ts só é necessária para rodar direto com node
 import * as f from "./fluxo.ts"
 // @ts-ignore TS5097
-import { lerSaida, extrairJson, statusDaEntrega, semLinhaStatus, decisaoResposta, decisaoSeguir, secaoDecisoes } from "./cli-parse.ts"
+import { lerSaida, linhaDeConsole, extrairJson, statusDaEntrega, semLinhaStatus, decisaoResposta, decisaoSeguir, secaoDecisoes } from "./cli-parse.ts"
 // @ts-ignore TS5097
 import { buscarTasks, cartaEmUso, listarTasks, mensagemCartaEmUso } from "./dados.ts"
 // @ts-ignore TS5097
@@ -65,6 +65,8 @@ const codex = [
 ].join("\n")
 assert.deepEqual(lerSaida("codex", codex), { texto: "ok", tokens: 10, erro: null })
 assert.equal(lerSaida("gemini", "resposta").texto, "resposta")
+// ferramenta no console: o primeiro texto da entrada, sem JSON escapado
+assert.equal(linhaDeConsole("claude", JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Edit", input: { replace_all: false, file_path: "a\\b.php" } }] } })), "[Edit] a\\b.php")
 assert.deepEqual(extrairJson('blá ```json\n{"a":1}\n``` fim'), { a: 1 })
 
 
