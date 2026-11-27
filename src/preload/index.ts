@@ -15,6 +15,13 @@ const escutar = <T,>(canal: string) => (cb: (e: T) => void) => {
 
 const api: FmaApi = {
   plataforma: process.platform,
+  terminal: {
+    abrir: (taskId, cartaId, cols, rows) => ipcRenderer.invoke("pty:abrir", taskId, cartaId, cols, rows),
+    escrever: (id, dados) => ipcRenderer.send("pty:escrever", id, dados),
+    redimensionar: (id, cols, rows) => ipcRenderer.send("pty:redimensionar", id, cols, rows),
+    fechar: (id) => ipcRenderer.send("pty:fechar", id),
+    aoEvento: escutar("pty:evento"),
+  },
   janela: {
     acao: (a) => ipcRenderer.send("janela:acao", a),
     maximizada: () => ipcRenderer.invoke("janela:maximizada"),
@@ -164,6 +171,8 @@ const api: FmaApi = {
   geral: {
     resumo: () => ipcRenderer.invoke("geral:resumo"),
     concluida: (taskId) => ipcRenderer.invoke("geral:concluida", taskId),
+    pendencia: (taskId, tipo) => ipcRenderer.invoke("geral:pendencia", taskId, tipo),
+    aoAbrirTask: escutar<string>("geral:abrir-task"),
     boasVindas: () => ipcRenderer.invoke("geral:boas-vindas"),
     concluirBoasVindas: () => ipcRenderer.invoke("geral:concluir-boas-vindas"),
     tutorialVisto: () => ipcRenderer.invoke("geral:tutorial-visto"),

@@ -17,6 +17,7 @@ export interface ProjetoLido {
   ambiente: string
   comandos: string[]
   pastasCompartilhadas: string[]
+  preparo: string[]
   branchBase: string
   limiteDevolucoes: number
   limiteTokens: number
@@ -33,10 +34,10 @@ export interface ConexaoLida {
 }
 
 export function lerProjeto(db: DatabaseSync, id: string): ProjetoLido | null {
-  const p = db.prepare("SELECT id, nome, repositorio, ambiente, branch_base, limite_devolucoes, limite_tokens, vagas, contexto, comandos, pastas_compartilhadas FROM projeto WHERE id = ?").get(id) as
-    | { id: string; nome: string; repositorio: string; ambiente: string; branch_base: string; limite_devolucoes: number; limite_tokens: number; vagas: number; contexto: string; comandos: string | null; pastas_compartilhadas: string | null }
+  const p = db.prepare("SELECT id, nome, repositorio, ambiente, branch_base, limite_devolucoes, limite_tokens, vagas, contexto, comandos, pastas_compartilhadas, preparo FROM projeto WHERE id = ?").get(id) as
+    | { id: string; nome: string; repositorio: string; ambiente: string; branch_base: string; limite_devolucoes: number; limite_tokens: number; vagas: number; contexto: string; comandos: string | null; pastas_compartilhadas: string | null; preparo: string | null }
     | undefined
-  return p ? { id: p.id, nome: p.nome, repositorio: p.repositorio, ambiente: p.ambiente, branchBase: p.branch_base, limiteDevolucoes: p.limite_devolucoes, limiteTokens: p.limite_tokens, vagas: p.vagas, contexto: p.contexto, comandos: p.comandos ? JSON.parse(p.comandos) : COMANDOS_PADRAO, pastasCompartilhadas: p.pastas_compartilhadas ? JSON.parse(p.pastas_compartilhadas) : PASTAS_PADRAO } : null
+  return p ? { id: p.id, nome: p.nome, repositorio: p.repositorio, ambiente: p.ambiente, branchBase: p.branch_base, limiteDevolucoes: p.limite_devolucoes, limiteTokens: p.limite_tokens, vagas: p.vagas, contexto: p.contexto, comandos: p.comandos ? JSON.parse(p.comandos) : COMANDOS_PADRAO, pastasCompartilhadas: p.pastas_compartilhadas ? JSON.parse(p.pastas_compartilhadas) : PASTAS_PADRAO, preparo: p.preparo ? JSON.parse(p.preparo) : [] } : null
 }
 
 /** Cartas na mesa do projeto, na ordem da coleção. */

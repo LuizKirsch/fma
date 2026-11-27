@@ -198,6 +198,14 @@ async function prepararWorktree(projeto: ProjetoLido, wt: string, aviso: (t: str
     const falta = [".fma/", ...ligadas.map((p) => `/${p.replace(/\\/g, "/")}`)].filter((l) => !tem.has(l)) // symlink não casa com "vendor/" do .gitignore: sem isso o git add -A o versionaria
     if (falta.length) { mkdirSync(paraFs(amb, P.dirname(arq)), { recursive: true }); writeFileSync(arq, `${atual && !atual.endsWith("\n") ? "\n" : ""}${falta.join("\n")}\n`) }
   } catch (e) { aviso(`Não consegui atualizar o info/exclude do repositório: ${(e as Error).message}`) }
+  // Comandos de preparo do projeto (npm install, cp .env...), na ordem. Falha só avisa: as cartas ainda podem corrigir.
+  for (const linha of projeto.preparo.map((c) => c.trim()).filter(Boolean)) {
+    try {
+      // ponytail: 10 min por comando; um install maior que isso vira aviso e as cartas seguem.
+      if (amb === "local" && process.platform === "win32") await rodar(amb, linha, [], { cwd: wt, shell: true, timeout: 600_000 })
+      else await rodar(amb, "bash", ["-lc", linha], { cwd: wt, timeout: 600_000 })
+    } catch (e) { aviso(`O preparo do worktree falhou em "${linha}": ${(e as Error).message.slice(0, 600)}`) }
+  }
 }
 
 /** Roda uma carta na CLI dela (RF 6.44), com stdout em streaming para o console. */

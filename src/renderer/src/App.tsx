@@ -3,7 +3,7 @@
  * Áreas: Projetos (abas com a mesa de cada um) e Coleção. O Histórico entra com as tasks.
  */
 import { ControlesJanela } from "@/components/ControlesJanela"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { FolderGit2, Layers, Plug, Settings } from "lucide-react"
 import { ORDEM_SUGERIDA } from "@shared/catalogo"
 import { cartaNova } from "@shared/carta"
@@ -20,7 +20,7 @@ import { Configuracoes } from "@/components/Configuracoes"
 import { Tour, type PassoTour } from "@/components/Tour"
 import { GERAL, Projetos } from "@/views/Projetos"
 import { useProjetos } from "@/data/projetos"
-import { pendenciasDe, useTasks } from "@/data/tasks"
+import { pendenciasDe, usePedidoAbrir, useTasks } from "@/data/tasks"
 import { Forja, type Forjar } from "@/components/Forja"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -50,6 +50,9 @@ export default function App() {
   const contas = useContas()
   const [apagando, setApagando] = useState(false)
   const [aba, setAba] = useState(GERAL)
+  // Notificação ou toast pediu uma task: vai para o projeto dela (o ProjetoAberto escolhe a task).
+  const pedido = usePedidoAbrir()
+  useEffect(() => { if (pedido) { setArea("projetos"); setAba(pedido.projetoId) } }, [pedido])
   const [config, setConfig] = useState(false)
   const [tour, setTour] = useState(false)
   const [tourPendente, setTourPendente] = useState(false) // carta forjada dentro do "Novo projeto": o tour espera o projeto

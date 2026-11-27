@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 
-const doProjeto = (p: Projeto): Ajustes => ({ nome: p.nome, repositorio: p.repositorio, branchBase: p.branchBase, vagas: p.vagas, limiteDevolucoes: p.limiteDevolucoes, limiteTokens: p.limiteTokens, comandos: p.comandos, pastasCompartilhadas: p.pastasCompartilhadas })
+const doProjeto = (p: Projeto): Ajustes => ({ nome: p.nome, repositorio: p.repositorio, branchBase: p.branchBase, vagas: p.vagas, limiteDevolucoes: p.limiteDevolucoes, limiteTokens: p.limiteTokens, comandos: p.comandos, pastasCompartilhadas: p.pastasCompartilhadas, preparo: p.preparo })
 
 export function AjustesProjeto({ projeto, aoFechar }: { projeto: Projeto | null; aoFechar: () => void }) {
   const [a, setA] = useState<Ajustes | null>(null)
@@ -116,6 +116,11 @@ export function AjustesProjeto({ projeto, aoFechar }: { projeto: Projeto | null;
               <FieldLabel htmlFor="aj-pastas">Pastas ligadas no worktree</FieldLabel>
               <Textarea id="aj-pastas" rows={3} className="font-mono text-xs" value={a.pastasCompartilhadas.join("\n")} onChange={(e) => muda({ pastasCompartilhadas: e.target.value.split("\n") })} />
               <FieldDescription>Pastas que o git não versiona (ex. vendor, node_modules) e que as cartas precisam para rodar testes. O worktree fica em .fma/worktrees dentro do repositório, então um container que monta o repositório também enxerga a task.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="aj-preparo">Ao criar o worktree, rodar</FieldLabel>
+              <Textarea id="aj-preparo" rows={3} className="font-mono text-xs" placeholder={"npm install\ncp .env.example .env"} value={a.preparo.join("\n")} onChange={(e) => muda({ preparo: e.target.value.split("\n") })} />
+              <FieldDescription>Um por linha, na ordem, dentro do worktree e antes de as cartas começarem. Se um falhar, a task segue e o erro aparece na crônica.</FieldDescription>
             </Field>
           </FieldGroup>
           <DialogFooter className="sm:justify-between">

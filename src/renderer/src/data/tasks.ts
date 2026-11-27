@@ -36,7 +36,10 @@ function aoEvento(e: Parameters<Parameters<typeof window.fma.tasks.aoEvento>[0]>
     const t = e.task
     const antes = estado.tasks.find((x) => x.id === t.id)
     if (antes && antes.situacao !== "concluida" && t.situacao === "concluida") void avisarConclusao(t.id)
-    if (antes && antes.situacao !== "revisao" && t.situacao === "revisao") toast.success(`Task ${t.referencia ?? "#" + t.numero} pronta para revisão`, { description: "Veja as mudanças e aceite, peça ajuste ou descarte." })
+    if (antes && antes.situacao !== "revisao" && t.situacao === "revisao") {
+      toast.success(`Task ${t.referencia ?? "#" + t.numero} pronta para revisão`, { description: "Veja as mudanças e aceite, peça ajuste ou descarte.", action: { label: "Abrir", onClick: () => abrirTask(t.id) } })
+      void window.fma.geral.pendencia(t.id, "revisao")
+    }
     const tasks = estado.tasks.some((x) => x.id === t.id) ? estado.tasks.map((x) => (x.id === t.id ? t : x)) : [t, ...estado.tasks]
     const d = estado.detalhes[t.id]
     muda({ tasks, detalhes: d ? { ...estado.detalhes, [t.id]: { ...d, task: t } } : estado.detalhes })
@@ -55,12 +58,23 @@ function aoEvento(e: Parameters<Parameters<typeof window.fma.tasks.aoEvento>[0]>
     muda({ consoles: { ...estado.consoles, [e.taskId]: l.length > MAX_CONSOLE ? l.slice(-MAX_CONSOLE) : l } })
   } else if (e.tipo === "decisao") {
     const t = estado.tasks.find((x) => x.id === e.taskId)
-    toast.warning(`Task #${t?.numero ?? ""} espera sua decisão`, { description: e.decisao.motivo })
+    toast.warning(`Task #${t?.numero ?? ""} espera sua decisão`, { description: e.decisao.motivo, action: { label: "Abrir", onClick: () => abrirTask(e.taskId) } })
+    void window.fma.geral.pendencia(e.taskId, "decisao")
   } else if (e.tipo === "fila") {
     const pos = new Map(e.posicoes.map((p) => [p.taskId, p.posicao]))
     muda({ tasks: estado.tasks.map((t) => (t.projetoId === e.projetoId ? { ...t, posicaoFila: pos.get(t.id) ?? null } : t)) })
   }
 }
+
+/** Pedido de abrir uma task (clique na notificação ou no toast): o App troca para o projeto e o ProjetoAberto escolhe a task. */
+let pedidoAbrir: { projetoId: string; taskId: string } | null = null
+const ouvintesAbrir = new Set<() => void>()
+export function abrirTask(taskId: string | null) {
+  const t = taskId ? estado.tasks.find((x) => x.id === taskId) : null
+  pedidoAbrir = t ? { projetoId: t.projetoId, taskId: t.id } : null
+  ouvintesAbrir.forEach((f) => f())
+}
+export const usePedidoAbrir = () => useSyncExternalStore((f) => { ouvintesAbrir.add(f); return () => ouvintesAbrir.delete(f) }, () => pedidoAbrir)
 
 /** RF 6.39: o núcleo mostra a notificação do sistema e devolve o resumo; aqui sai o toast. */
 async function avisarConclusao(id: string) {
@@ -79,6 +93,7 @@ function iniciar() {
   if (iniciado) return
   iniciado = true
   window.fma.tasks.aoEvento(aoEvento)
+  window.fma.geral.aoAbrirTask(abrirTask)
   void window.fma.tasks.listar().then((tasks) => muda({ tasks, carregado: true }))
 }
 

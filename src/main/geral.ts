@@ -33,15 +33,34 @@ export function avisarConclusao(db: DatabaseSync, taskId: string, janela: () => 
   const perguntas = (db.prepare("SELECT COUNT(*) AS n FROM evento_task WHERE task_id = ? AND tipo = 'pergunta'").get(taskId) as { n: number }).n
   const prUrl = (db.prepare("SELECT pr_url FROM task WHERE id = ?").get(taskId) as { pr_url: string | null } | undefined)?.pr_url ?? null
   const r: ResumoConclusao = { numero: t.numero, referencia: t.referencia, titulo: t.titulo, projeto: t.projeto, prUrl, perguntas, devolucoes: t.voltas, tokens: t.tokens }
-  if (Notification.isSupported()) {
-    const n = new Notification({
-      title: `Task ${t.referencia ?? "#" + t.numero} concluída`,
-      body: `${t.projeto}${prUrl ? " · PR aberto" : ""} · ${t.voltas} devoluç${t.voltas === 1 ? "ão" : "ões"} · ${t.tokens.toLocaleString("pt-BR")} tokens`,
-    })
-    n.on("click", () => { const j = janela(); if (j && !j.isDestroyed()) { if (j.isMinimized()) j.restore(); j.focus() } })
-    n.show()
-  }
+  notificar(janela, taskId, `Task ${t.referencia ?? "#" + t.numero} concluída`, `${t.projeto}${prUrl ? " · PR aberto" : ""} · ${t.voltas} devoluç${t.voltas === 1 ? "ão" : "ões"} · ${t.tokens.toLocaleString("pt-BR")} tokens`)
   return r
+}
+
+/** Notificação do sistema; o clique traz a janela e abre a task (evento "geral:abrir-task"). */
+function notificar(janela: () => BrowserWindow | null, taskId: string, title: string, body: string) {
+  if (!Notification.isSupported()) return
+  const n = new Notification({ title, body })
+  n.on("click", () => {
+    const j = janela()
+    if (!j || j.isDestroyed()) return
+    if (j.isMinimized()) j.restore()
+    j.focus()
+    j.webContents.send("geral:abrir-task", taskId)
+  })
+  n.show()
+}
+
+/** A task precisa de você (decisão ou revisão). Com a janela em foco o toast já basta: só notifica com ela em segundo plano. */
+export function avisarPendencia(db: DatabaseSync, taskId: string, tipo: "decisao" | "revisao", janela: () => BrowserWindow | null): void {
+  const j = janela()
+  if (j && !j.isDestroyed() && j.isFocused()) return
+  const t = db.prepare("SELECT t.numero, t.referencia, t.titulo, t.missao, t.decisao_motivo, p.nome AS projeto FROM task t JOIN projeto p ON p.id = t.projeto_id WHERE t.id = ?")
+    .get(taskId) as { numero: number; referencia: string | null; titulo: string | null; missao: string; decisao_motivo: string | null; projeto: string } | undefined
+  if (!t) return
+  const rotulo = `Task ${t.referencia ?? "#" + t.numero}`
+  if (tipo === "decisao") notificar(janela, taskId, `${rotulo} espera sua decisão`, `${t.projeto} · ${(t.decisao_motivo ?? t.titulo ?? t.missao).slice(0, 180)}`)
+  else notificar(janela, taskId, `${rotulo} pronta para revisão`, `${t.projeto} · ${(t.titulo ?? t.missao).slice(0, 180)}`)
 }
 
 const CHAVE_BOAS_VINDAS = "boas_vindas_vistas"

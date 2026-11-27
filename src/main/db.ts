@@ -202,6 +202,10 @@ const MIGRACOES: string[] = [
   `
   ALTER TABLE task_carta ADD COLUMN sessao TEXT;
   `,
+  // Comandos de preparo do worktree (JSON; null = nenhum).
+  `
+  ALTER TABLE projeto ADD COLUMN preparo TEXT;
+  `,
   // Próxima migração: item novo AQUI no fim.
 ]
 

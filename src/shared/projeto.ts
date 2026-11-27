@@ -35,6 +35,8 @@ export interface Projeto {
   comandos: string[]
   /** Pastas do repositório que o git não versiona e que o worktree liga por symlink/junção (ex. vendor, node_modules). */
   pastasCompartilhadas: string[]
+  /** Comandos rodados no worktree logo depois de criá-lo, antes das cartas (ex. npm install, cp .env.example .env). */
+  preparo: string[]
 }
 
 export const PASTAS_PADRAO = ["vendor", "node_modules"]
@@ -50,7 +52,7 @@ export const COMANDOS_PADRAO = [
   "git status *", "git diff *", "git log *", "git show *",
 ]
 
-export type AjustesProjeto = Pick<Projeto, "nome" | "repositorio" | "branchBase" | "vagas" | "limiteDevolucoes" | "limiteTokens" | "comandos" | "pastasCompartilhadas">
+export type AjustesProjeto = Pick<Projeto, "nome" | "repositorio" | "branchBase" | "vagas" | "limiteDevolucoes" | "limiteTokens" | "comandos" | "pastasCompartilhadas" | "preparo">
 export type PreferenciasMesa = Pick<Projeto, "conexoesVisiveis" | "mostrarSugestoes" | "vista">
 
 export interface NovoProjeto {

@@ -68,6 +68,14 @@ export type Resultado<T> = { ok: true; valor: T } | { ok: false; erro: string }
 
 export interface FmaApi {
   plataforma: string
+  /** Terminal de verdade (PTY) no worktree da task; com cartaId, entra na sessão da carta. */
+  terminal: {
+    abrir(taskId: string, cartaId: string | null, cols: number, rows: number): Promise<Resultado<string>>
+    escrever(id: string, dados: string): void
+    redimensionar(id: string, cols: number, rows: number): void
+    fechar(id: string): void
+    aoEvento(cb: (e: { id: string; dados?: string; saiu?: number }) => void): () => void
+  }
   /** Barra própria (sem a barra nativa do sistema). */
   janela: {
     acao(a: "minimizar" | "maximizar" | "fechar"): void
@@ -252,6 +260,10 @@ export interface FmaApi {
     resumo(): Promise<ResumoProjeto[]>
     /** RF 6.39: notificação do sistema; devolve o resumo para o toast. */
     concluida(taskId: string): Promise<ResumoConclusao | null>
+    /** A task precisa de você: notificação do sistema se a janela estiver em segundo plano. */
+    pendencia(taskId: string, tipo: "decisao" | "revisao"): Promise<void>
+    /** Clique numa notificação: abrir esta task. */
+    aoAbrirTask(cb: (taskId: string) => void): () => void
     /** RF 2.21: true só no primeiro acesso. */
     boasVindas(): Promise<boolean>
     concluirBoasVindas(): Promise<void>

@@ -24,11 +24,12 @@ import { configurarApoio } from "./apoio/ports"
 import { registrarIpcApoio } from "./apoio/ipc"
 import { configurarMonitores } from "./monitores/ports"
 import { registrarIpcMonitores } from "./monitores/ipc"
+import { fecharTerminais, registrarIpcTerminal } from "./terminal"
 import { iniciarAgendador } from "./monitores/servico"
 import { registrarIpcMaestro } from "./maestro/ipc"
 import { listarTasks } from "./motor/dados"
 import { iniciarAtualizacao } from "./atualizacao"
-import { apagarTudo, avisarConclusao, concluirBoasVindas, concluirTutorial, tutorialVisto, mostrarBoasVindas, resumoDosProjetos } from "./geral"
+import { apagarTudo, avisarConclusao, avisarPendencia, concluirBoasVindas, concluirTutorial, tutorialVisto, mostrarBoasVindas, resumoDosProjetos } from "./geral"
 
 let janelaAtual: BrowserWindow | null = null
 
@@ -75,6 +76,7 @@ function registrarApi(db: DatabaseSync) {
 
   ipcMain.handle("geral:resumo", () => resumoDosProjetos(db))
   ipcMain.handle("geral:concluida", (_e, taskId: string) => avisarConclusao(db, taskId, () => janelaAtual))
+  ipcMain.handle("geral:pendencia", (_e, taskId: string, tipo: "decisao" | "revisao") => avisarPendencia(db, taskId, tipo, () => janelaAtual))
   ipcMain.handle("geral:boas-vindas", () => mostrarBoasVindas(db))
   ipcMain.handle("geral:concluir-boas-vindas", () => concluirBoasVindas(db))
   ipcMain.handle("geral:tutorial-visto", () => tutorialVisto(db))
@@ -152,6 +154,7 @@ app.whenReady().then(async () => {
   configurarMonitores(criarDepsMonitor(db))
   registrarIpcApoio(db, janelaViva)
   registrarIpcMonitores(db, janelaViva)
+  registrarIpcTerminal(db, janelaViva)
   registrarIpcBiblioteca(db)
   maestro = registrarIpcMaestro(db, janelaViva, criarMotorApi(db))
   ligarIntegracoes(db, maestro)
@@ -168,5 +171,5 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit()
 })
-app.on("before-quit", () => { pararProcessos(); void maestro?.parar() })
+app.on("before-quit", () => { pararProcessos(); fecharTerminais(); void maestro?.parar() })
 app.on("will-quit", () => fecharBanco())

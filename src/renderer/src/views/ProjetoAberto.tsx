@@ -2,14 +2,14 @@
  * Projeto aberto (T03 a T05): a faixa das tasks em andamento (RF 8.01), os avisos de decisão (RF 8.20),
  * as visões Mesa, Tasks e Terminal e o painel lateral com a Entrega e a Crônica da task acompanhada (RF 8.08).
  */
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { LayoutGrid, ListChecks, MessageCircle, Plus, Radar, SquareTerminal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Projeto } from "@shared/projeto"
 import { rotuloAmbiente } from "@shared/ambiente"
 import { Badge } from "@/components/ui/badge"
 import type { Task } from "@shared/task"
-import { progresso, useDetalhe, useTasks, vagasEmUso } from "@/data/tasks"
+import { abrirTask, progresso, useDetalhe, usePedidoAbrir, useTasks, vagasEmUso } from "@/data/tasks"
 import { Mesa } from "@/views/Mesa"
 import { Tasks } from "@/views/Tasks"
 import { Terminal } from "@/views/Terminal"
@@ -48,6 +48,8 @@ export function ProjetoAberto({ projeto, forjar }: { projeto: Projeto; forjar: F
   const [visao, setVisao] = useState<Visao>("mesa")
   const [escolhida, setEscolhida] = useState<string | null>(null)
   const [foco, setFoco] = useState<Foco>("lista")
+  const pedido = usePedidoAbrir()
+  useEffect(() => { if (pedido?.projetoId === projeto.id) { setEscolhida(pedido.taskId); setVisao("tasks"); setFoco("lista"); abrirTask(null) } }, [pedido, projeto.id])
   const [nova, setNova] = useState(false)
   const [chat, setChat] = useState(false)
   const mon = useMonitores(projeto.id)
@@ -101,7 +103,7 @@ export function ProjetoAberto({ projeto, forjar }: { projeto: Projeto; forjar: F
           <div className="min-h-0 flex-1">
             {visao === "mesa" && <Mesa projeto={projeto} forjar={forjar} avisoMaestro={() => setChat(true)} />}
             {visao === "tasks" && (!detalhe || foco === "lista") && <Tasks projeto={projeto} acompanhada={acompanhada?.id ?? null} aoEscolher={setEscolhida} aoNova={() => setNova(true)} />}
-            {visao === "tasks" && detalhe && foco === "terminal" && <Terminal detalhe={detalhe} />}
+            {visao === "tasks" && detalhe && foco === "terminal" && <Terminal key={detalhe.task.id} detalhe={detalhe} />}
             {visao === "tasks" && detalhe && foco === "mesa" && <Mesa projeto={projeto} forjar={forjar} avisoMaestro={() => setChat(true)} atividades={atividades} />}
             {visao === "monitores" && <Monitores projeto={projeto} monitores={mon.monitores} recarregar={mon.recarregar} />}
           </div>

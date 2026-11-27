@@ -27,3 +27,9 @@ publish:
   owner: LuizKirsch
   repo: fma
   releaseType: release
+
+# node-pty (terminal da task) é nativo e, no Windows, roda conpty/winpty-agent.exe: precisa ficar fora do asar.
+asarUnpack:
+  - node_modules/node-pty/**
+# Sem recompilar dependências nativas: node-pty 1.x é N-API e já traz o binário pronto (win32/darwin).
+npmRebuild: false
