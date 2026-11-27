@@ -136,11 +136,23 @@ async function removerWorktree(repo: string, wt: string, amb: string): Promise<v
 
 async function commitar(cwd: string, msg: string, amb: string) {
   await git(cwd, ["add", "-A"], amb)
-  if (!(await git(cwd, ["status", "--porcelain"], amb))) return
+  const mesclando = await git(cwd, ["rev-parse", "-q", "--verify", "MERGE_HEAD"], amb).then(() => true, () => false)
+  if (mesclando) {
+    // Merge da base em andamento (conflito na entrega): não deixa commitar marcadores <<<<<<< esquecidos.
+    const marcadores = await git(cwd, ["diff", "--cached", "--check"], amb).then(() => "", (e: Error) => (/conflict marker/i.test(e.message) ? e.message : ""))
+    if (marcadores) throw new Error(`Ainda há marcadores de conflito (<<<<<<< ======= >>>>>>>) nestes arquivos; resolva todos antes de terminar:\n${marcadores.slice(0, 1500)}`)
+  }
+  if (!(await git(cwd, ["status", "--porcelain"], amb))) {
+    // Merge sem nada a mudar (a carta resolveu igual ao que já estava): ainda precisa do commit de merge.
+    if (mesclando) await git(cwd, [...(await identidade(cwd, amb)), "commit", "--no-edit"], amb)
+    return
+  }
   await git(cwd, [...(await identidade(cwd, amb)), "commit", "-m", msg], amb)
 }
 
 const HOOK = "O commit foi recusado pelo hook do projeto. Corrija o que ele aponta:"
+/** Começo do ajuste automático quando o merge local dá conflito: voltarComAjuste traz a base para o worktree antes das cartas. */
+const AJUSTE_CONFLITO = "Resolver conflitos com a branch base:"
 const motivoHook = (saida: string) => {
   const ls = saida.split("\n").map((l) => l.trim()).filter(Boolean)
   return `O hook de commit do projeto recusou o trabalho: ${curto(ls.find((l) => /error|fail|erro|✖|✗/i.test(l)) ?? ls[0] ?? "sem detalhes", 200)}`
@@ -956,8 +968,12 @@ export async function aceitarTask(db: DatabaseSync, taskId: string, modo: "pr" |
       if (await git(repo, ["status", "--porcelain", "-uno"], amb)) return { ok: false, erro: "O repositório principal tem alterações não commitadas. Commite ou guarde (stash) e tente de novo." }
       try { await git(repo, [...(await identidade(repo, amb)), "merge", "--no-ff", "-m", `Merge da task #${task.numero} (${branch})`, branch], amb) } catch (e) {
         await git(repo, ["merge", "--abort"], amb).catch(() => {})
-        if (/conflict/i.test((e as Error).message)) throw new Error(`Conflito ao fundir com ${base}. Use Abrir PR ou Pedir ajuste para a carta resolver.`)
-        throw e
+        if (!/conflict/i.test((e as Error).message)) throw e
+        // Conflito: a base vai para o worktree da task (voltarComAjuste) e o time resolve; depois a task volta para revisão.
+        aceitando.delete(taskId)
+        registrarEvento(db, taskId, "aviso", `O merge com ${base} deu conflito: a task voltou ao trabalho para as cartas resolverem.`)
+        const r = await pedirAjuste(db, taskId, `${AJUSTE_CONFLITO} o FMA trouxe ${base} para este worktree e alguns arquivos ficaram com marcadores de conflito (<<<<<<< ======= >>>>>>>). Resolva todos mantendo o que a ${base} trouxe e o que esta task fez; não apague o trabalho de nenhum dos lados. Depois rode os testes que cobrem esses arquivos. Não rode git merge, git commit nem git rebase: o FMA commita.`)
+        return r.ok ? r : { ok: false, erro: `Conflito ao fundir com ${base}, e não consegui mandar a task resolver: ${r.erro}` }
       }
     }
     if (task.worktree) await removerWorktree(repo, task.worktree, amb).catch(() => {})
@@ -1009,6 +1025,17 @@ async function voltarComAjuste(db: DatabaseSync, task: Task, projeto: ProjetoLid
       await prepararWorktree(projeto, wt, (t) => registrarEvento(db, taskId, "aviso", t))
     }
   } catch (e) { return { ok: false, erro: `Não consegui recriar o worktree: ${(e as Error).message}` } }
+  // Ajuste de conflito (veio do merge recusado): traz a base para o worktree; os conflitos ficam nos arquivos para a carta resolver.
+  if (task.ajustes.split("\n").pop()!.startsWith(AJUSTE_CONFLITO)) {
+    try {
+      const conflitos = await git(wt, [...(await identidade(wt, amb)), "merge", "--no-ff", "--no-commit", projeto.branchBase], amb).then(() => "", async (e: Error) => {
+        const arquivos = (await git(wt, ["diff", "--name-only", "--diff-filter=U"], amb).catch(() => "")).trim()
+        if (!arquivos) throw e // falhou por outro motivo
+        return arquivos
+      })
+      registrarEvento(db, taskId, "aviso", conflitos ? `Conflitos com ${projeto.branchBase} para a carta resolver: ${conflitos.split("\n").join(", ")}` : `${projeto.branchBase} entrou no worktree sem conflito.`)
+    } catch (e) { return { ok: false, erro: `Não consegui trazer ${projeto.branchBase} para o worktree: ${(e as Error).message}` } }
+  }
   emTransacao(db, () => {
     db.prepare("UPDATE task SET situacao = 'andamento', fila_em = NULL, worktree = ?, encerrada_em = NULL WHERE id = ?").run(wt, taskId)
     db.prepare("UPDATE task_carta SET estado = 'espera', atividade = 'Refazendo com o ajuste', concluida = 0, tarefa = NULL, voltas = 0, sessao = NULL WHERE task_id = ?").run(taskId)

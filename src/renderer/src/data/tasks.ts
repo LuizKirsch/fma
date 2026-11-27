@@ -194,7 +194,12 @@ export const liberarTask = async (id: string, resposta?: string) => ok(await win
 export const seguirTask = async (id: string) => ok(await window.fma.tasks.seguir(id))
 export const descartarTask = async (id: string) => ok(await window.fma.tasks.descartar(id))
 export const tirarDaFila = async (id: string) => ok(await window.fma.tasks.tirarDaFila(id))
-export const aceitarTask = async (id: string, modo: "pr" | "merge" | "nada") => ok(await window.fma.tasks.aceitar(id, modo))
+export async function aceitarTask(id: string, modo: "pr" | "merge" | "nada") {
+  const t = ok(await window.fma.tasks.aceitar(id, modo))
+  // Merge com conflito: o núcleo manda o time resolver em vez de concluir.
+  if (t && t.situacao !== "concluida") toast.info(`Conflito com a branch base na task ${t.referencia ?? "#" + t.numero}`, { description: "Ela voltou ao trabalho para as cartas resolverem e depois volta para revisão.", duration: 10000 })
+  return t
+}
 export const pedirAjuste = async (id: string, texto: string) => ok(await window.fma.tasks.pedirAjuste(id, texto))
 export const revisarTask = async (id: string) => ok(await window.fma.tasks.revisar(id))
 export const reabrirTask = async (id: string) => ok(await window.fma.tasks.reabrir(id))
